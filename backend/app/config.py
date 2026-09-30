@@ -41,3 +41,22 @@ CONTRACT_SPECS: Dict[str, ContractSpec] = {
         purity=995.0,           # Official MCX Specification: 995 fineness
         problem_statement_purity=995.0,
         tick_size=1.0,
+        lot_size_description="100 grams (10 x 10g units, 995 fineness)",
+        expiry_rule="5th day of the contract expiry month (or preceding business day if holiday)",
+        tender_period_days=3,
+        delivery_unit="100 grams bar"
+    ),
+    "GOLDTEN": ContractSpec(
+        symbol="GOLDTEN",
+        name="MCX Gold Ten",
+        trading_unit_grams=10.0,
+        quote_unit_grams=10.0,
+        multiplier_to_10g=1.0,  # Quoted per 10 grams
+        purity=999.0,           # Official MCX Circular MCX/TRD/714/2024: 999 fineness
+        problem_statement_purity=999.0,
+        tick_size=0.5,
+        lot_size_description="10 grams (999 fineness)",
+        expiry_rule="Last calendar day of the contract expiry month (or preceding business day if holiday)",
+        tender_period_days=3,
+        delivery_unit="10 grams bar/coin"
+    ),
