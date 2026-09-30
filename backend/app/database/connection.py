@@ -102,3 +102,34 @@ def init_db() -> None:
             high REAL NOT NULL,
             low REAL NOT NULL,
             close REAL NOT NULL,
+            volume INTEGER NOT NULL,
+            open_interest INTEGER NOT NULL,
+            normalized_close_10g REAL NOT NULL,
+            purity_adjusted_10g REAL NOT NULL,
+            dte INTEGER NOT NULL,
+            implied_basis_pct REAL DEFAULT 0.0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(symbol, trade_date, expiry_date)
+        );
+        """)
+
+        # Indexes for fast lookup
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_market_data_symbol_date ON market_data(symbol, trade_date);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_market_data_date ON market_data(trade_date);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_market_data_expiry ON market_data(expiry_date);")
+
+        # Backtest runs table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS backtest_runs (
+            run_id TEXT PRIMARY KEY,
+            strategy_name TEXT NOT NULL,
+            pair_a TEXT NOT NULL,
+            pair_b TEXT NOT NULL,
+            entry_z REAL NOT NULL,
+            exit_z REAL NOT NULL,
+            stop_loss_z REAL NOT NULL,
+            lookback INTEGER NOT NULL,
+            total_trades INTEGER NOT NULL,
+            win_rate REAL NOT NULL,
+            total_return_pct REAL NOT NULL,
+            max_drawdown_pct REAL NOT NULL,
