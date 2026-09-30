@@ -133,3 +133,35 @@ def init_db() -> None:
             win_rate REAL NOT NULL,
             total_return_pct REAL NOT NULL,
             max_drawdown_pct REAL NOT NULL,
+            sharpe_ratio REAL NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            result_json TEXT NOT NULL
+        );
+        """)
+
+        # Data ingestion audit log
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ingestion_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            records_ingested INTEGER NOT NULL,
+            trade_date_start TEXT,
+            trade_date_end TEXT,
+            status TEXT NOT NULL,
+            error_message TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+
+        # Raw Bhavcopy Imports Table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS raw_bhavcopy_imports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            requested_date TEXT,
+            actual_data_date TEXT,
+            status TEXT NOT NULL,
+            total_rows_found INTEGER NOT NULL DEFAULT 0,
+            valid_rows_count INTEGER NOT NULL DEFAULT 0,
+            rejected_rows_count INTEGER NOT NULL DEFAULT 0,
+            duplicate_rows_count INTEGER NOT NULL DEFAULT 0,
