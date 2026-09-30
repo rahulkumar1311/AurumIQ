@@ -165,3 +165,24 @@ def init_db() -> None:
             valid_rows_count INTEGER NOT NULL DEFAULT 0,
             rejected_rows_count INTEGER NOT NULL DEFAULT 0,
             duplicate_rows_count INTEGER NOT NULL DEFAULT 0,
+            error_message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+
+        # Raw Bhavcopy Records Table (Stores raw imported fields before & after validation)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS raw_bhavcopy_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            import_id INTEGER REFERENCES raw_bhavcopy_imports(id),
+            raw_symbol TEXT,
+            clean_symbol TEXT,
+            raw_trade_date TEXT,
+            clean_trade_date TEXT,
+            raw_expiry_date TEXT,
+            clean_expiry_date TEXT,
+            contract_id TEXT,
+            open REAL,
+            high REAL,
+            low REAL,
+            close REAL,
