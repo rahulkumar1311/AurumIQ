@@ -103,3 +103,13 @@ class NormalizationConfig(BaseModel):
     purity_convention: str = "OFFICIAL_MCX"  # "OFFICIAL_MCX" (GOLDGUINEA=995) or "PROBLEM_STATEMENT_03" (GOLDGUINEA=999)
     allow_raw_purity_mode: bool = True
     tender_buffer_days: int = 3  # MCX staggered delivery tender window (last 3 trading days)
+    max_expiry_gap_days: int = 45  # Unsuitable expiry combination if maturity gap > 45 days
+    purity_convention_note: str = (
+        "OFFICIAL MCX SPECIFICATION AUDIT (Verified 2026-10-04 from https://www.mcxindia.com/products/bullion/gold): "
+        "GOLDM (995 fineness), GOLDTEN (999 fineness), GOLDGUINEA (995 fineness), and GOLDPETAL (999 fineness). "
+        "FLAGGED ASSUMPTION: Hack in Hills Problem Statement #03 listed GOLDGUINEA at 999 purity, whereas the official MCX "
+        "Gold Guinea contract specifies 995 fineness. AurumIQ provides explicit, configurable support for both conventions "
+        "via purity_convention ('OFFICIAL_MCX' vs 'PROBLEM_STATEMENT_03'). "
+        "Standard reference is INR per 10.0 grams of 999.0 Fine Gold Equivalent. Original exchange settlement prices are strictly preserved."
+    )
+    mcx_verification_note: str = (
