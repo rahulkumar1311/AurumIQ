@@ -78,3 +78,16 @@ CONTRACT_SPECS: Dict[str, ContractSpec] = {
         symbol="GOLDPETAL",
         name="MCX Gold Petal",
         trading_unit_grams=1.0,
+        quote_unit_grams=1.0,
+        multiplier_to_10g=10.0,  # Quoted per 1g -> x10 for 10g
+        purity=999.0,           # Official MCX Specification: 999 fineness
+        problem_statement_purity=999.0,
+        tick_size=1.0,
+        lot_size_description="1 gram (999 fineness blister card)",
+        expiry_rule="Last calendar day of the contract expiry month (or preceding business day if holiday)",
+        tender_period_days=3,
+        delivery_unit="1 gram blister card"
+    )
+}
+
+# Transaction Cost Parameters (MCX Standard Regulatory Structure)
