@@ -39,3 +39,35 @@ def init_db() -> None:
             trading_unit_grams REAL NOT NULL,
             quote_unit_grams REAL NOT NULL,
             multiplier_to_10g REAL NOT NULL,
+            purity REAL NOT NULL,
+            tick_size REAL NOT NULL,
+            lot_size_description TEXT,
+            expiry_rule TEXT,
+            tender_period_days INTEGER DEFAULT 3,
+            delivery_unit TEXT,
+            official_source_url TEXT,
+            audit_date TEXT,
+            active INTEGER DEFAULT 1
+        );
+        """)
+
+        # Add columns if upgrading from earlier schema
+        for col_name, col_type in [
+            ("expiry_rule", "TEXT"),
+            ("tender_period_days", "INTEGER DEFAULT 3"),
+            ("delivery_unit", "TEXT"),
+            ("official_source_url", "TEXT"),
+            ("audit_date", "TEXT")
+        ]:
+            try:
+                cursor.execute(f"ALTER TABLE contracts ADD COLUMN {col_name} {col_type};")
+            except sqlite3.OperationalError:
+                pass  # column already exists
+
+        # Insert/Update default contract specs
+        for spec in CONTRACT_SPECS.values():
+            cursor.execute("""
+            INSERT INTO contracts (
+                symbol, name, trading_unit_grams, quote_unit_grams,
+                multiplier_to_10g, purity, tick_size, lot_size_description,
+                expiry_rule, tender_period_days, delivery_unit, official_source_url, audit_date, active
