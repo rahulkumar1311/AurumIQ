@@ -113,3 +113,12 @@ class NormalizationConfig(BaseModel):
         "Standard reference is INR per 10.0 grams of 999.0 Fine Gold Equivalent. Original exchange settlement prices are strictly preserved."
     )
     mcx_verification_note: str = (
+        "Audited on 2026-10-04 against official MCX contract specifications. "
+        "Expiry Rules: GOLDM expires on the 5th day of the expiry month; GOLDTEN, GOLDGUINEA, and GOLDPETAL expire "
+        "on the last calendar day of the expiry month. Inter-contract expiry asymmetry (~25 days gap within same contract month) "
+        "is explicitly modeled in spread eligibility and tender lifecycle rules."
+    )
+
+DEFAULT_NORMALIZATION_CONFIG = NormalizationConfig()
+
+
