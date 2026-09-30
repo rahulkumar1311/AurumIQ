@@ -159,3 +159,69 @@ def parse_mcx_bhavcopy_file(
     """
     Parses and validates downloaded or uploaded MCX Bhavcopy files.
     - Strips padding from symbols
+    - Identifies contract using (symbol, expiry_date)
+    - Validates actual data date against requested date (DD/MM/YYYY)
+    - Rejects date mismatches without silently treating old data as requested date
+    - Deduplicates records
+    """
+    # 1. Parse requested date if provided
+    req_dt = None
+    req_iso = None
+    if requested_date_str:
+        try:
+            req_dt, req_iso = parse_requested_date(requested_date_str)
+            # Check weekend
+            is_valid_day, reason = check_trading_day(req_dt)
+            if not is_valid_day:
+                return {
+                    "success": False,
+                    "status": "WEEKEND_HOLIDAY",
+                    "source": source,
+                    "requested_date": req_iso,
+                    "actual_data_date": None,
+                    "message": reason,
+                    "records": [],
+                    "raw_records": [],
+                    "validation_report": {
+                        "total_extracted": 0,
+                        "valid_count": 0,
+                        "rejected_count": 0,
+                        "duplicate_count": 0,
+                        "rejected_samples": [{"reason": reason}]
+                    }
+                }
+        except ValueError as e:
+            return {
+                "success": False,
+                "status": "INVALID_REQUESTED_DATE",
+                "source": source,
+                "requested_date": requested_date_str,
+                "actual_data_date": None,
+                "message": str(e),
+                "records": [],
+                "raw_records": [],
+                "validation_report": None
+            }
+
+    # 2. Parse CSV text
+    if not content or not content.strip():
+        return {
+            "success": False,
+            "status": "EMPTY_FILE",
+            "source": source,
+            "requested_date": req_iso,
+            "actual_data_date": None,
+            "message": "Supplied Bhavcopy content is empty.",
+            "records": [],
+            "raw_records": [],
+            "validation_report": None
+        }
+
+    try:
+        df = pd.read_csv(io.StringIO(content))
+    except Exception as e:
+        return {
+            "success": False,
+            "status": "MALFORMED_FILE",
+            "source": source,
+            "requested_date": req_iso,
