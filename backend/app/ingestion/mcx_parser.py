@@ -88,3 +88,74 @@ def parse_compact_expiry_date(raw_expiry: Any) -> str:
             dt = datetime.strptime(s, fmt)
             return dt.strftime("%Y-%m-%d")
         except ValueError:
+            continue
+            
+    raise ValueError(f"Unable to parse compact expiry date: '{raw_expiry}'")
+
+def parse_trading_date(raw_date: Any, target_dt: Optional[datetime] = None) -> str:
+    """
+    Parses trading date from Bhavcopy file.
+    Validates actual returned trading date which may be expressed as MM/DD/YYYY or DD/MM/YYYY.
+    """
+    if not raw_date:
+        raise ValueError("Trade date is empty")
+        
+    s = str(raw_date).strip().upper()
+    
+    # If target_dt is provided, check if either MM/DD/YYYY or DD/MM/YYYY aligns with target_dt
+    if target_dt:
+        target_iso = target_dt.strftime("%Y-%m-%d")
+        # Try MM/DD/YYYY and DD/MM/YYYY specifically against target
+        for fmt in ["%m/%d/%Y", "%d/%m/%Y", "%Y-%m-%d", "%d-%b-%Y", "%d-%m-%Y"]:
+            try:
+                dt = datetime.strptime(s, fmt)
+                if dt.strftime("%Y-%m-%d") == target_iso:
+                    return target_iso
+            except ValueError:
+                continue
+
+    # Fallback to standard parsing order (MM/DD/YYYY is common in MCX Bhavcopy exports)
+    formats = [
+        "%m/%d/%Y",  # MCX often exports in US MM/DD/YYYY format
+        "%d/%m/%Y",
+        "%Y-%m-%d",
+        "%d-%b-%Y",
+        "%d-%m-%Y",
+        "%d%b%Y"
+    ]
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(s, fmt)
+            return dt.strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+            
+    raise ValueError(f"Unable to parse trade date: '{raw_date}'")
+
+def clean_numeric(val: Any, field_name: str, allow_zero: bool = False) -> float:
+    """Cleans numeric values by removing commas, whitespace, and validating bounds."""
+    if val is None:
+        raise ValueError(f"Missing {field_name}")
+    s = str(val).strip().replace(",", "")
+    if s in ["", "-", "N.A.", "NA", "NULL", "nan"]:
+        raise ValueError(f"Non-numeric value in {field_name}: '{val}'")
+    try:
+        num = float(s)
+    except ValueError:
+        raise ValueError(f"Invalid float in {field_name}: '{val}'")
+        
+    if not allow_zero and num <= 0:
+        raise ValueError(f"{field_name} must be strictly positive (got {num})")
+    if allow_zero and num < 0:
+        raise ValueError(f"{field_name} cannot be negative (got {num})")
+        
+    return num
+
+def parse_mcx_bhavcopy_file(
+    content: str,
+    requested_date_str: Optional[str] = None,
+    source: str = "CSV_UPLOAD"
+) -> Dict[str, Any]:
+    """
+    Parses and validates downloaded or uploaded MCX Bhavcopy files.
+    - Strips padding from symbols
