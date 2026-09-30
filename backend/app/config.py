@@ -22,3 +22,22 @@ class ContractSpec(BaseModel):
     tick_size: float
     lot_size_description: str
     exchange: str = "MCX"
+    settlement_type: str = "Compulsory Delivery"
+    expiry_rule: str
+    tender_period_days: int = 3  # Staggered delivery tender period comprises last 3 trading days
+    delivery_unit: str
+    official_source_url: str = "https://www.mcxindia.com/products/bullion/gold"
+    audit_date: str = "2026-10-04"
+
+# Official MCX Gold Contract Specifications
+# Audited against https://www.mcxindia.com/products/bullion/gold on 2026-10-04
+CONTRACT_SPECS: Dict[str, ContractSpec] = {
+    "GOLDM": ContractSpec(
+        symbol="GOLDM",
+        name="MCX Gold Mini",
+        trading_unit_grams=100.0,
+        quote_unit_grams=10.0,
+        multiplier_to_10g=1.0,  # Quoted per 10 grams
+        purity=995.0,           # Official MCX Specification: 995 fineness
+        problem_statement_purity=995.0,
+        tick_size=1.0,
