@@ -60,3 +60,21 @@ CONTRACT_SPECS: Dict[str, ContractSpec] = {
         tender_period_days=3,
         delivery_unit="10 grams bar/coin"
     ),
+    "GOLDGUINEA": ContractSpec(
+        symbol="GOLDGUINEA",
+        name="MCX Gold Guinea",
+        trading_unit_grams=8.0,
+        quote_unit_grams=8.0,
+        multiplier_to_10g=10.0 / 8.0,  # Quoted per 8g (1 Guinea) -> x1.25 for 10g
+        purity=995.0,           # Official MCX Specification: 995 fineness coin standard
+        problem_statement_purity=999.0, # Flagged assumption: PS#03 stated 999 purity
+        tick_size=1.0,
+        lot_size_description="8 grams (1 Guinea coin, 995 fineness)",
+        expiry_rule="Last calendar day of the contract expiry month (or preceding business day if holiday)",
+        tender_period_days=3,
+        delivery_unit="8 grams coin"
+    ),
+    "GOLDPETAL": ContractSpec(
+        symbol="GOLDPETAL",
+        name="MCX Gold Petal",
+        trading_unit_grams=1.0,
