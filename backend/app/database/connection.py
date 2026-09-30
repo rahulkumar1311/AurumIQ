@@ -186,3 +186,24 @@ def init_db() -> None:
             high REAL,
             low REAL,
             close REAL,
+            volume INTEGER,
+            open_interest INTEGER,
+            is_valid INTEGER DEFAULT 1,
+            validation_error TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+
+        # Validation Diagnostics Log Table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS validation_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            import_id INTEGER REFERENCES raw_bhavcopy_imports(id),
+            row_index INTEGER,
+            raw_data_json TEXT,
+            reason TEXT NOT NULL,
+            severity TEXT DEFAULT 'ERROR',
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+
