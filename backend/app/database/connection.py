@@ -71,3 +71,34 @@ def init_db() -> None:
                 symbol, name, trading_unit_grams, quote_unit_grams,
                 multiplier_to_10g, purity, tick_size, lot_size_description,
                 expiry_rule, tender_period_days, delivery_unit, official_source_url, audit_date, active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ON CONFLICT(symbol) DO UPDATE SET
+                name=excluded.name,
+                trading_unit_grams=excluded.trading_unit_grams,
+                quote_unit_grams=excluded.quote_unit_grams,
+                multiplier_to_10g=excluded.multiplier_to_10g,
+                purity=excluded.purity,
+                tick_size=excluded.tick_size,
+                lot_size_description=excluded.lot_size_description,
+                expiry_rule=excluded.expiry_rule,
+                tender_period_days=excluded.tender_period_days,
+                delivery_unit=excluded.delivery_unit,
+                official_source_url=excluded.official_source_url,
+                audit_date=excluded.audit_date;
+            """, (
+                spec.symbol, spec.name, spec.trading_unit_grams, spec.quote_unit_grams,
+                spec.multiplier_to_10g, spec.purity, spec.tick_size, spec.lot_size_description,
+                spec.expiry_rule, spec.tender_period_days, spec.delivery_unit, spec.official_source_url, spec.audit_date
+            ))
+
+        # Market data table for daily bhavcopy bars
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS market_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            trade_date TEXT NOT NULL,
+            expiry_date TEXT NOT NULL,
+            open REAL NOT NULL,
+            high REAL NOT NULL,
+            low REAL NOT NULL,
+            close REAL NOT NULL,
