@@ -91,3 +91,15 @@ CONTRACT_SPECS: Dict[str, ContractSpec] = {
 }
 
 # Transaction Cost Parameters (MCX Standard Regulatory Structure)
+MCX_TURNOVER_FEE_PCT = 0.0015  # 0.0015% (~ ₹150 per crore)
+CTT_SELL_PCT = 0.01            # Commodity Transaction Tax on sell side: 0.01%
+STAMP_DUTY_BUY_PCT = 0.002     # Stamp duty on buy side: 0.002%
+BROKERAGE_PCT = 0.005          # 0.005% institutional brokerage
+GST_PCT = 18.0                 # 18% on (Brokerage + Exchange fees)
+
+class NormalizationConfig(BaseModel):
+    reference_weight_grams: float = 10.0
+    reference_purity: float = 999.0  # Fine gold equivalent (999 parts per 1000)
+    purity_convention: str = "OFFICIAL_MCX"  # "OFFICIAL_MCX" (GOLDGUINEA=995) or "PROBLEM_STATEMENT_03" (GOLDGUINEA=999)
+    allow_raw_purity_mode: bool = True
+    tender_buffer_days: int = 3  # MCX staggered delivery tender window (last 3 trading days)
