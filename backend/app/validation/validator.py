@@ -22,3 +22,21 @@ def parse_date(date_str: Any) -> str:
         "%d-%m-%Y",  # 05-11-2024
         "%Y/%m/%d",
         "%d/%m/%Y",
+        "%d%b%Y",    # 05NOV2024
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(clean_str, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    raise ValueError(f"Unsupported date format: {date_str}")
+
+def validate_market_record(record: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
+    """
+    Validates a single market bar record.
+    Returns (is_valid, error_reason, cleaned_record).
+    """
+    symbol = str(record.get("symbol", "")).strip().upper()
+    if symbol not in CONTRACT_SPECS:
+        return False, f"Unsupported commodity symbol: {symbol}. Must be one of {list(CONTRACT_SPECS.keys())}", {}
+
