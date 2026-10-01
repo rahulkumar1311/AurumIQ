@@ -440,3 +440,55 @@ def calculate_spread_series(
                 f"Statistical divergence detected (z = {current_z:+.2f}σ > +{z_threshold:.2f}σ), but NOT executable."
             )
             reasons.append(
+                f"Observed maturity-adjusted spread (₹{abs(latest_mat_adj_spread):.2f}/10g) is insufficient to overcome "
+                f"estimated round-trip transaction friction and carry (₹{computed_friction:.2f}/10g)."
+            )
+            reasons.append(
+                f"Estimated net executable spread is -₹{abs(latest_net_executable):.2f}/10g <= 0. Realized trading would lose money."
+            )
+    elif current_z <= -z_threshold:
+        # Leg A is statistically cheap relative to Leg B
+        if latest_net_executable > 0:
+            signal_type = "LONG_SPREAD"
+            signal_label = f"Long Spread (Buy {symbol_a}, Sell {symbol_b})"
+            is_actionable = True
+            reasons.append(
+                f"Statistically undervalued: Rolling z-score ({current_z:+.2f}σ) breaches lower threshold (-{z_threshold:.2f}σ)."
+            )
+            reasons.append(
+                f"Gross spread is ₹{current_spread:.2f}/10g ({latest['pct_spread']:+.2f}% discount)."
+            )
+            if latest_dte_diff != 0:
+                reasons.append(
+                    f"Maturity carry drag of ₹{latest_carry_drag:.2f}/10g accounted for (DTE diff: {latest_dte_diff}d). "
+                    f"Maturity-adjusted spread is ₹{latest_mat_adj_spread:.2f}/10g."
+                )
+            reasons.append(
+                f"Estimated round-trip friction is ₹{computed_friction:.2f}/10g. "
+                f"Net executable edge is +₹{latest_net_executable:.2f}/10g."
+            )
+        else:
+            signal_type = "NO_SIGNAL"
+            signal_label = "No actionable signal (Friction-bound divergence)"
+            reasons.append(
+                f"Statistical discount detected (z = {current_z:+.2f}σ < -{z_threshold:.2f}σ), but NOT executable."
+            )
+            reasons.append(
+                f"Observed maturity-adjusted spread (₹{abs(latest_mat_adj_spread):.2f}/10g) is insufficient to overcome "
+                f"estimated round-trip transaction friction and carry (₹{computed_friction:.2f}/10g)."
+            )
+            reasons.append(
+                f"Estimated net executable spread is -₹{abs(latest_net_executable):.2f}/10g <= 0. Realized trading would lose money."
+            )
+    else:
+        signal_type = "NO_SIGNAL"
+        signal_label = "No actionable signal (Neutral band)"
+        reasons.append(
+            f"Rolling z-score ({current_z:+.2f}σ) is within the neutral band (±{z_threshold:.2f}σ)."
+        )
+        if not np.isnan(latest["rolling_mean"]):
+            reasons.append(
+                f"Spread (₹{current_spread:.2f}/10g) is within normal statistical deviation of historical mean "
+                f"(₹{latest['rolling_mean']:.2f} ± ₹{latest['rolling_std']:.2f})."
+            )
+
