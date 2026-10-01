@@ -109,3 +109,13 @@ def validate_batch(records: List[Dict[str, Any]]) -> Dict[str, Any]:
             rejected_records.append({
                 "index": idx,
                 "record": r,
+                "reason": reason
+            })
+            
+    return {
+        "total_count": len(records),
+        "valid_count": len(valid_records),
+        "rejected_count": len(rejected_records),
+        "valid_records": valid_records,
+        "rejected_records": rejected_records
+    }
