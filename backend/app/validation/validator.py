@@ -40,3 +40,21 @@ def validate_market_record(record: Dict[str, Any]) -> Tuple[bool, str, Dict[str,
     if symbol not in CONTRACT_SPECS:
         return False, f"Unsupported commodity symbol: {symbol}. Must be one of {list(CONTRACT_SPECS.keys())}", {}
 
+    try:
+        trade_date = parse_date(record.get("trade_date"))
+        expiry_date = parse_date(record.get("expiry_date"))
+    except ValueError as e:
+        return False, f"Invalid date: {str(e)}", {}
+
+    if expiry_date < trade_date:
+        return False, f"Expiry date {expiry_date} is before trade date {trade_date}", {}
+
+    try:
+        open_p = float(record.get("open", 0.0))
+        high_p = float(record.get("high", 0.0))
+        low_p = float(record.get("low", 0.0))
+        close_p = float(record.get("close", 0.0))
+        volume = int(record.get("volume", 0))
+        oi = int(record.get("open_interest", 0))
+    except (ValueError, TypeError) as e:
+        return False, f"Non-numeric market values: {str(e)}", {}
