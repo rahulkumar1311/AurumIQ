@@ -131,3 +131,42 @@ class ContractNormalizationEngine:
         contract_id = f"{symbol}_{record['expiry_date']}"
 
         return {
+            # Contract Identifiers
+            "contract_id": contract_id,
+            "symbol": symbol,
+            "trade_date": record["trade_date"],
+            "expiry_date": record["expiry_date"],
+            "dte": dte,
+            
+            # PRESERVED ORIGINAL EXCHANGE PRICES (Zero alteration)
+            "raw_close": round(raw_close, 2),
+            "raw_open": round(raw_open, 2),
+            "raw_high": round(raw_high, 2),
+            "raw_low": round(raw_low, 2),
+            "close": round(raw_close, 2),  # Backward compatibility
+            "open": round(raw_open, 2),
+            "high": round(raw_high, 2),
+            "low": round(raw_low, 2),
+            "volume": volume,
+            "open_interest": oi,
+            
+            # SEPARATED TRADING UNIT & QUOTATION UNIT
+            "trading_unit_grams": factors["trading_unit_grams"],
+            "quote_unit_grams": factors["quote_unit_grams"],
+            "contract_purity": factors["contract_purity"],
+            
+            # NORMALIZED ANALYTICAL OUTPUTS
+            "normalized_close_10g": round(nominal_10g, 2),          # Nominal 10g base
+            "purity_adjusted_10g": round(fine_gold_10g, 2),         # 999 Fine Gold Equivalent 10g base
+            "fine_gold_price_1g": round(fine_gold_1g, 2),           # 999 Fine Gold per 1g
+            "contract_notional_inr": round(contract_notional_inr, 2),# Full contract value in INR
+            "implied_basis_pct": round(implied_basis_pct, 4),
+            
+            # NORMALIZATION AUDIT METADATA
+            "quotation_multiplier": factors["quotation_multiplier"],
+            "purity_multiplier": round(factors["purity_multiplier"], 6),
+            "composite_multiplier": round(factors["composite_multiplier"], 6),
+            "reference_basis": f"{factors['reference_weight_grams']}g of {factors['reference_purity']} Fineness Gold"
+        }
+
+    def normalize_market_records(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
