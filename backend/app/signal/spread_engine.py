@@ -537,3 +537,42 @@ def calculate_spread_series(
         "std_spread": round(float(merged["spread"].std()), 2),
         "min_spread": round(float(merged["spread"].min()), 2),
         "max_spread": round(float(merged["spread"].max()), 2),
+        "percentile_rank": round(pct_rank, 1),
+        "half_life_days": half_life_days,
+        "adf_t_statistic": adf_tstat,
+        "is_stationary_5pct": is_stationary,
+        "sample_size": len(merged),
+        "is_matched_expiry": is_fully_matched,
+        "expiry_status": expiry_status,
+        "carry_notice": carry_notice,
+        "history_note": history_note,
+        "latest_expiry_a": str(latest["expiry_a"]),
+        "latest_expiry_b": str(latest["expiry_b"]),
+        "latest_dte_diff": latest_dte_diff,
+        "latest_carry_drag": latest_carry_drag,
+        "latest_maturity_adjusted_spread": latest_mat_adj_spread,
+        "estimated_friction_inr": computed_friction,
+        "net_executable_spread": latest_net_executable,
+        "is_actionable": is_actionable,
+        "disclaimer": compliance_disclaimer
+    }
+
+    signal_payload = {
+        "signal_type": signal_type,
+        "signal_label": signal_label,
+        "is_actionable": is_actionable,
+        "timestamp": str(latest["trade_date"]),
+        "reference_prices": {
+            "symbol_a": {
+                "symbol": symbol_a,
+                "expiry": str(latest["expiry_a"]),
+                "raw_close": float(latest["raw_close_a"]),
+                "normalized_price_10g": float(latest["price_a"]),
+                "volume": int(latest["volume_a"]),
+                "open_interest": int(latest["oi_a"]),
+                "dte": int(latest["dte_a"])
+            },
+            "symbol_b": {
+                "symbol": symbol_b,
+                "expiry": str(latest["expiry_b"]),
+                "raw_close": float(latest["raw_close_b"]),
