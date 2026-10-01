@@ -170,3 +170,43 @@ class ContractNormalizationEngine:
         }
 
     def normalize_market_records(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Batch normalizes market records, dynamically computing near-month benchmark
+        to establish basis carry curves.
+        """
+        if not records:
+            return []
+            
+        df = pd.DataFrame(records)
+        
+        # Compute benchmark: Near-month GOLDM or nearest active contract per trade_date
+        benchmark_map = {}
+        for t_date, group in df.groupby("trade_date"):
+            goldm_rows = group[group["symbol"] == "GOLDM"].copy()
+            if not goldm_rows.empty:
+                # Calculate DTE to pick near-month
+                goldm_rows["t_dt"] = pd.to_datetime(goldm_rows["trade_date"])
+                goldm_rows["e_dt"] = pd.to_datetime(goldm_rows["expiry_date"])
+                goldm_rows["dte"] = (goldm_rows["e_dt"] - goldm_rows["t_dt"]).dt.days
+                near_goldm = goldm_rows.sort_values("dte").iloc[0]
+                norm_res = self.normalize_single_record(near_goldm.to_dict())
+                benchmark_map[t_date] = norm_res["purity_adjusted_10g"]
+            else:
+                # Fallback to group first
+                first_row = group.iloc[0].to_dict()
+                norm_res = self.normalize_single_record(first_row)
+                benchmark_map[t_date] = norm_res["purity_adjusted_10g"]
+
+        normalized_list = []
+        for r in records:
+            bench = benchmark_map.get(r["trade_date"])
+            norm = self.normalize_single_record(r, benchmark_price=bench)
+            normalized_list.append(norm)
+            
+        return normalized_list
+
+    def get_assumptions_report(self) -> Dict[str, Any]:
+        """
+        Generates comprehensive normalization assumptions documentation.
+        """
+        specs_report = []
