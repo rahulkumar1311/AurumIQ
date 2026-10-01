@@ -70,3 +70,75 @@ def attempt_mcx_direct_download(
     formatted_date_ddmmyyyy = req_dt.strftime("%d/%m/%Y")
     
     try:
+        with httpx.Client(timeout=timeout_sec, follow_redirects=True, headers=headers) as client:
+            resp = client.get(OFFICIAL_MCX_BHAVCOPY_URL)
+            
+            # Check response status
+            if resp.status_code == 403:
+                return {
+                    "success": False,
+                    "status": "FETCH_BLOCKED",
+                    "http_status": 403,
+                    "requested_date": req_iso,
+                    "actual_data_date": None,
+                    "message": (
+                        "MCX India portal blocked direct programmatic download (HTTP 403 Forbidden / Akamai WAF). "
+                        "The exchange requires manual user browser interaction on https://www.mcxindia.com/market-data/bhavcopy. "
+                        "Please use the CSV upload fallback below to import the downloaded file."
+                    ),
+                    "source": "MCX_DIRECT_DOWNLOAD",
+                    "official_url": OFFICIAL_MCX_BHAVCOPY_URL,
+                    "records": []
+                }
+            elif resp.status_code != 200:
+                return {
+                    "success": False,
+                    "status": f"HTTP_ERROR_{resp.status_code}",
+                    "http_status": resp.status_code,
+                    "requested_date": req_iso,
+                    "actual_data_date": None,
+                    "message": f"MCX server responded with HTTP {resp.status_code}.",
+                    "source": "MCX_DIRECT_DOWNLOAD",
+                    "official_url": OFFICIAL_MCX_BHAVCOPY_URL,
+                    "records": []
+                }
+                
+            # If 200 returned, check if body is CSV or HTML portal
+            content_type = resp.headers.get("content-type", "").lower()
+            text_preview = resp.text[:200].lower()
+            
+            if "csv" in content_type or "symbol" in text_preview or "commodity" in text_preview:
+                # Direct CSV returned! Pass to parser
+                return parse_mcx_bhavcopy_file(
+                    content=resp.text,
+                    requested_date_str=requested_date_str,
+                    source="MCX_DIRECT_DOWNLOAD"
+                )
+            else:
+                # HTML page returned (form requiring ASPX viewstate / date submission)
+                return {
+                    "success": False,
+                    "status": "DYNAMIC_PORTAL_INTERACTION_REQUIRED",
+                    "requested_date": req_iso,
+                    "actual_data_date": None,
+                    "message": (
+                        "MCX Bhavcopy portal serves an ASP.NET dynamic page requiring session tokens and client-side JavaScript execution. "
+                        "As per institutional data governance without unauthorized scraping, please download the daily CSV from "
+                        "https://www.mcxindia.com/market-data/bhavcopy and upload it using the reliable CSV Upload fallback below."
+                    ),
+                    "source": "MCX_DIRECT_DOWNLOAD",
+                    "official_url": OFFICIAL_MCX_BHAVCOPY_URL,
+                    "records": []
+                }
+                
+    except httpx.RequestError as e:
+        return {
+            "success": False,
+            "status": "NETWORK_ERROR",
+            "requested_date": req_iso,
+            "actual_data_date": None,
+            "message": f"Network connection to MCX failed: {str(e)}",
+            "source": "MCX_DIRECT_DOWNLOAD",
+            "official_url": OFFICIAL_MCX_BHAVCOPY_URL,
+            "records": []
+        }
