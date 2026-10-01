@@ -242,3 +242,25 @@ class ContractNormalizationEngine:
                     "MCX/TRD/714/2024 (Launch of Gold Ten 10g 999 Fineness Futures)",
                     "MCX Gold Mini Product Specification (100g, 995 Fineness, 5th Day Expiry)",
                     "MCX Gold Guinea Product Specification (8g, 995 Fineness, Month-End Expiry)",
+                    "MCX Gold Petal Product Specification (1g, 999 Fineness, Month-End Expiry)"
+                ]
+            },
+            "contract_factors": specs_report,
+            "mathematical_formulas": {
+                "quotation_factor": "Reference_Weight_Grams / Contract_Quote_Unit_Grams",
+                "purity_factor": "Reference_Purity / Contract_Purity",
+                "fine_gold_equivalent_price": "Raw_Close * Quotation_Factor * Purity_Factor",
+                "nominal_quote_base_price": "Raw_Close * Quotation_Factor",
+                "contract_notional_value": "Raw_Close * (Trading_Unit_Grams / Quote_Unit_Grams)",
+                "annualized_carry_basis_pct": "((Fine_Gold_Price - Benchmark_Price) / Benchmark_Price) * (365 / DTE) * 100"
+            }
+        }
+
+# Global engine instance
+default_engine = ContractNormalizationEngine()
+
+def normalize_single_record(record: Dict[str, Any], spot_price: float = None) -> Dict[str, Any]:
+    return default_engine.normalize_single_record(record, benchmark_price=spot_price)
+
+def normalize_market_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return default_engine.normalize_market_records(records)
