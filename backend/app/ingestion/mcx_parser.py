@@ -301,3 +301,63 @@ def parse_mcx_bhavcopy_file(
             "symbol": raw_sym,
             "trade_date": raw_t_date,
             "expiry_date": raw_exp_date,
+            "open": row["open"],
+            "high": row["high"],
+            "low": row["low"],
+            "close": row["close"],
+            "volume": row["volume"],
+            "open_interest": row["open_interest"]
+        }
+
+        # Validate dates
+        try:
+            clean_t_date = parse_trading_date(raw_t_date, target_dt=req_dt)
+            detected_trade_dates.add(clean_t_date)
+        except ValueError as e:
+            rejections.append({"row_index": idx, "reason": str(e), "raw": row_json})
+            raw_audit_records.append({
+                "raw_symbol": raw_sym, "clean_symbol": clean_sym,
+                "raw_trade_date": raw_t_date, "clean_trade_date": None,
+                "raw_expiry_date": raw_exp_date, "clean_expiry_date": None,
+                "contract_id": None, "open": None, "high": None, "low": None, "close": None,
+                "volume": 0, "open_interest": 0, "is_valid": 0, "validation_error": str(e)
+            })
+            continue
+
+        try:
+            clean_exp_date = parse_compact_expiry_date(raw_exp_date)
+        except ValueError as e:
+            rejections.append({"row_index": idx, "reason": str(e), "raw": row_json})
+            raw_audit_records.append({
+                "raw_symbol": raw_sym, "clean_symbol": clean_sym,
+                "raw_trade_date": raw_t_date, "clean_trade_date": clean_t_date,
+                "raw_expiry_date": raw_exp_date, "clean_expiry_date": None,
+                "contract_id": None, "open": None, "high": None, "low": None, "close": None,
+                "volume": 0, "open_interest": 0, "is_valid": 0, "validation_error": str(e)
+            })
+            continue
+
+        # Expiry must be >= trade date
+        if clean_exp_date < clean_t_date:
+            err = f"Expiry date {clean_exp_date} is before trade date {clean_t_date}"
+            rejections.append({"row_index": idx, "reason": err, "raw": row_json})
+            raw_audit_records.append({
+                "raw_symbol": raw_sym, "clean_symbol": clean_sym,
+                "raw_trade_date": raw_t_date, "clean_trade_date": clean_t_date,
+                "raw_expiry_date": raw_exp_date, "clean_expiry_date": clean_exp_date,
+                "contract_id": f"{clean_sym}_{clean_exp_date}",
+                "open": None, "high": None, "low": None, "close": None,
+                "volume": 0, "open_interest": 0, "is_valid": 0, "validation_error": err
+            })
+            continue
+
+        # Composite contract identifier: SYMBOL + EXPIRY
+        contract_key = (clean_sym, clean_exp_date, clean_t_date)
+        if contract_key in seen_contract_keys:
+            duplicate_count += 1
+            rejections.append({
+                "row_index": idx,
+                "reason": f"Duplicate record for contract {clean_sym} expiry {clean_exp_date} on {clean_t_date}",
+                "raw": row_json
+            })
+            continue
