@@ -58,3 +58,21 @@ def validate_market_record(record: Dict[str, Any]) -> Tuple[bool, str, Dict[str,
         oi = int(record.get("open_interest", 0))
     except (ValueError, TypeError) as e:
         return False, f"Non-numeric market values: {str(e)}", {}
+
+    if close_p <= 0 or open_p <= 0 or high_p <= 0 or low_p <= 0:
+        return False, "Price values must be strictly positive", {}
+
+    # Allow slight floating point tolerance for OHLC consistency
+    eps = 0.01
+    if high_p + eps < low_p:
+        return False, f"High price ({high_p}) is lower than Low price ({low_p})", {}
+
+    if high_p + eps < open_p or high_p + eps < close_p:
+        return False, f"High ({high_p}) is lower than Open ({open_p}) or Close ({close_p})", {}
+
+    if low_p - eps > open_p or low_p - eps > close_p:
+        return False, f"Low ({low_p}) is higher than Open ({open_p}) or Close ({close_p})", {}
+
+    if volume < 0 or oi < 0:
+        return False, f"Volume ({volume}) or Open Interest ({oi}) cannot be negative", {}
+
