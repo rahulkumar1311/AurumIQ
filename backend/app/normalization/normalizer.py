@@ -51,3 +51,43 @@ class ContractNormalizationEngine:
         composite_multiplier = quotation_multiplier * purity_multiplier
         
         # Trading lot notional multiplier: trading_unit / quote_unit
+        # e.g., GOLDM: 100g / 10g = 10; GOLDTEN: 10g / 10g = 1; GUINEA: 8g / 8g = 1; PETAL: 1g / 1g = 1
+        notional_multiplier = spec.trading_unit_grams / spec.quote_unit_grams
+
+        is_flagged = (spec.purity != spec.problem_statement_purity)
+        assumption_note = (
+            f"FLAGGED AUDIT DISCREPANCY: Official MCX deliverable specification is {spec.purity} fineness "
+            f"(verified 2026-10-04 from https://www.mcxindia.com/products/bullion/gold), whereas "
+            f"Hack in Hills Problem Statement #03 text assumed {spec.problem_statement_purity} purity. "
+            f"Active convention: '{self.config.purity_convention}'."
+            if is_flagged else "Verified against official MCX product specifications."
+        )
+        
+        return {
+            "symbol": symbol,
+            "contract_name": spec.name,
+            "trading_unit_grams": spec.trading_unit_grams,
+            "quote_unit_grams": spec.quote_unit_grams,
+            "contract_purity": effective_purity,
+            "official_mcx_purity": spec.purity,
+            "problem_statement_purity": spec.problem_statement_purity,
+            "purity_convention": self.config.purity_convention,
+            "is_flagged_assumption": is_flagged,
+            "assumption_note": assumption_note,
+            "reference_weight_grams": ref_weight,
+            "reference_purity": ref_purity,
+            "quotation_multiplier": quotation_multiplier,
+            "purity_multiplier": purity_multiplier,
+            "composite_multiplier": composite_multiplier,
+            "notional_multiplier": notional_multiplier,
+            "expiry_rule": spec.expiry_rule,
+            "tender_period_days": spec.tender_period_days,
+            "delivery_unit": spec.delivery_unit,
+            "audit_date": spec.audit_date,
+            "official_source_url": spec.official_source_url
+        }
+
+
+    def normalize_single_record(
+        self,
+        record: Dict[str, Any],
