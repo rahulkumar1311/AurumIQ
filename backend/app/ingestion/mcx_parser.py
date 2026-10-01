@@ -467,3 +467,39 @@ def parse_mcx_bhavcopy_file(
         return {
             "success": False,
             "status": "DATE_MISMATCH",
+            "source": source,
+            "requested_date": req_iso,
+            "actual_data_date": actual_data_date,
+            "message": err_msg,
+            "records": [],
+            "raw_records": raw_audit_records,
+            "validation_report": {
+                "total_extracted": len(df_gold),
+                "valid_count": 0,
+                "rejected_count": len(df_gold),
+                "duplicate_count": duplicate_count,
+                "rejected_samples": [{"reason": err_msg}]
+            }
+        }
+
+    return {
+        "success": len(valid_market_records) > 0,
+        "status": "SUCCESS" if valid_market_records else "VALIDATION_FAILED",
+        "source": source,
+        "requested_date": req_iso or actual_data_date,
+        "actual_data_date": actual_data_date,
+        "message": f"Successfully validated {len(valid_market_records)} contract records for {actual_data_date}.",
+        "records": valid_market_records,
+        "raw_records": raw_audit_records,
+        "validation_report": {
+            "total_extracted": len(df_gold),
+            "valid_count": len(valid_market_records),
+            "rejected_count": len(rejections),
+            "duplicate_count": duplicate_count,
+            "rejected_samples": rejections[:10]
+        }
+    }
+
+# Alias for backward compatibility
+parse_bhavcopy_csv = parse_mcx_bhavcopy_file
+
