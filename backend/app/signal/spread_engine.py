@@ -180,3 +180,68 @@ def calculate_spread_series(
     for i in range(n_rows):
         start_idx = max(0, i - lookback + 1)
         window = spreads_array[start_idx : i + 1]
+        
+        # Require at least min_observations in current window
+        if len(window) >= min_observations:
+            m = float(np.mean(window))
+            s = float(np.std(window, ddof=1)) if len(window) > 1 else 0.0
+            rolling_means[i] = round(m, 2)
+            rolling_stds[i] = round(s, 2)
+            
+            if s < 1e-8:
+                # Zero variance (flat spread)
+                zero_variance_flags[i] = True
+                z_scores[i] = 0.0
+                valid_z_flags[i] = False
+            else:
+                z = (spreads_array[i] - m) / s
+                z_scores[i] = round(float(z), 3)
+                valid_z_flags[i] = True
+
+    merged["rolling_mean"] = rolling_means
+    merged["rolling_std"] = rolling_stds
+    merged["z_score"] = z_scores
+    merged["valid_z"] = valid_z_flags
+    merged["zero_variance"] = zero_variance_flags
+
+    # Bollinger Bands (calculated where rolling mean is available)
+    merged["upper_band"] = [
+        round(m + z_threshold * s, 2) if not np.isnan(m) and not np.isnan(s) else None
+        for m, s in zip(rolling_means, rolling_stds)
+    ]
+    merged["lower_band"] = [
+        round(m - z_threshold * s, 2) if not np.isnan(m) and not np.isnan(s) else None
+        for m, s in zip(rolling_means, rolling_stds)
+    ]
+    merged["upper_1s"] = [
+        round(m + 1.0 * s, 2) if not np.isnan(m) and not np.isnan(s) else None
+        for m, s in zip(rolling_means, rolling_stds)
+    ]
+    merged["lower_1s"] = [
+        round(m - 1.0 * s, 2) if not np.isnan(m) and not np.isnan(s) else None
+        for m, s in zip(rolling_means, rolling_stds)
+    ]
+    # For backward compatibility
+    merged["upper_2s"] = merged["upper_band"]
+    merged["lower_2s"] = merged["lower_band"]
+
+    # 5. Data Quality Auditing (Flags missing data, stale observations, thin trading, unsuitable expiries, outliers)
+    # Check date gaps (> 4 calendar days)
+    trade_dates = pd.to_datetime(merged["trade_date"])
+    date_diffs = (trade_dates.diff().dt.days).fillna(1)
+    gaps = merged[date_diffs > 4]
+    if not gaps.empty:
+        for idx, gap_row in gaps.iterrows():
+            days_gap = int(date_diffs.loc[idx])
+            data_quality_warnings.append(
+                f"Missing observations: {days_gap}-day gap in trading dates detected before {gap_row['trade_date']}."
+            )
+
+    # Check asymmetric calendar observations (dates in one contract not in another)
+    dates_a = set(sub_a["trade_date"])
+    dates_b = set(sub_b["trade_date"])
+    missing_in_b = dates_a - dates_b
+    missing_in_a = dates_b - dates_a
+    if missing_in_b:
+        data_quality_warnings.append(
+            f"Missing observations: {len(missing_in_b)} trading session(s) present in {symbol_a} are missing in {symbol_b}."
