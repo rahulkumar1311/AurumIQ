@@ -76,3 +76,21 @@ def validate_market_record(record: Dict[str, Any]) -> Tuple[bool, str, Dict[str,
     if volume < 0 or oi < 0:
         return False, f"Volume ({volume}) or Open Interest ({oi}) cannot be negative", {}
 
+    # Normalization check for sanity range (MCX Gold price per 10g benchmark sanity)
+    spec = CONTRACT_SPECS[symbol]
+    norm_price_10g = close_p * spec.multiplier_to_10g
+    # Sanity range for Indian MCX Gold per 10g: ₹30,000 to ₹180,000
+    if norm_price_10g < 30000 or norm_price_10g > 180000:
+        return False, f"Normalized price ₹{norm_price_10g:.2f}/10g is outside plausible MCX bounds (₹30,000 - ₹180,000)", {}
+
+    cleaned = {
+        "symbol": symbol,
+        "trade_date": trade_date,
+        "expiry_date": expiry_date,
+        "open": round(open_p, 2),
+        "high": round(high_p, 2),
+        "low": round(low_p, 2),
+        "close": round(close_p, 2),
+        "volume": volume,
+        "open_interest": oi
+    }
