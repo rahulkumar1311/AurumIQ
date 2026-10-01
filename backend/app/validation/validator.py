@@ -94,3 +94,18 @@ def validate_market_record(record: Dict[str, Any]) -> Tuple[bool, str, Dict[str,
         "volume": volume,
         "open_interest": oi
     }
+    return True, "", cleaned
+
+def validate_batch(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Validates a batch of raw records and collects diagnostics."""
+    valid_records = []
+    rejected_records = []
+    
+    for idx, r in enumerate(records):
+        ok, reason, cleaned = validate_market_record(r)
+        if ok:
+            valid_records.append(cleaned)
+        else:
+            rejected_records.append({
+                "index": idx,
+                "record": r,
