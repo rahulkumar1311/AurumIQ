@@ -91,3 +91,43 @@ class ContractNormalizationEngine:
     def normalize_single_record(
         self,
         record: Dict[str, Any],
+        benchmark_price: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """
+        Normalizes a single contract bar while strictly preserving raw exchange settlement prices.
+        """
+        symbol = record["symbol"]
+        factors = self.get_factors(symbol)
+        
+        raw_close = float(record["close"])
+        raw_open = float(record.get("open", raw_close))
+        raw_high = float(record.get("high", raw_close))
+        raw_low = float(record.get("low", raw_close))
+        volume = int(record.get("volume", 0))
+        oi = int(record.get("open_interest", 0))
+        
+        # Parse Dates & DTE
+        trade_dt = datetime.strptime(record["trade_date"], "%Y-%m-%d")
+        expiry_dt = datetime.strptime(record["expiry_date"], "%Y-%m-%d")
+        dte = max(1, (expiry_dt - trade_dt).days)
+        
+        # 1. Nominal price per reference weight (e.g. 10g) without purity adjustment
+        nominal_10g = raw_close * factors["quotation_multiplier"]
+        
+        # 2. Fine-gold equivalent price per reference weight (e.g. 10g 999 fine gold)
+        fine_gold_10g = raw_close * factors["composite_multiplier"]
+        
+        # 3. Fine-gold price per 1 gram
+        fine_gold_1g = fine_gold_10g / factors["reference_weight_grams"]
+        
+        # 4. Total contract notional value in INR
+        contract_notional_inr = raw_close * factors["notional_multiplier"]
+        
+        # 5. Implied Annualized Basis Rate relative to benchmark spot/near-contract
+        implied_basis_pct = 0.0
+        if benchmark_price and benchmark_price > 0 and dte > 0:
+            implied_basis_pct = ((fine_gold_10g - benchmark_price) / benchmark_price) * (365.0 / dte) * 100.0
+            
+        contract_id = f"{symbol}_{record['expiry_date']}"
+
+        return {
