@@ -375,3 +375,68 @@ def calculate_spread_series(
     # Point-in-time percentile rank up to current index
     pct_rank = float((spread_values <= current_spread).mean() * 100.0)
 
+    # Determine Signal
+    is_actionable = False
+    reasons: List[str] = []
+    
+    # Critical blocking conditions (data quality, liquidity, tender period, or expiry mismatch)
+    has_critical_block = (
+        not valid_z
+        or is_expired
+        or in_tender_period
+        or bool(latest["zero_variance"])
+        or is_thin_a
+        or is_thin_b
+        or is_extreme_dte_diff
+        or (stale_a.iloc[-1] if not stale_a.empty else False)
+        or (stale_b.iloc[-1] if not stale_b.empty else False)
+    )
+
+    if has_critical_block:
+        signal_type = "NO_SIGNAL"
+        signal_label = "No actionable signal (Data quality or execution barrier)"
+        if not valid_z:
+            reasons.append(f"Insufficient valid historical observations in lookback window ({min_observations} required).")
+        if bool(latest["zero_variance"]):
+            reasons.append("Zero spread variance detected: Spread is constant over window. Division by zero avoided, no statistical deviation exists.")
+        if is_expired:
+            reasons.append("Contract expired: One or both contracts have DTE <= 0.")
+        if in_tender_period:
+            reasons.append("Tender period active (DTE <= 3d): MCX compulsory physical delivery window reached. Non-delivery relative-value trading is blocked.")
+        if is_thin_a or is_thin_b:
+            thin_sym = symbol_a if is_thin_a else symbol_b
+            thin_vol = int(latest["volume_a"] if is_thin_a else latest["volume_b"])
+            reasons.append(f"Thin trading in {thin_sym} (volume: {thin_vol} lots < 5): Market depth insufficient for multi-leg executable pair trade.")
+        if is_extreme_dte_diff:
+            reasons.append(f"Unsuitable expiry combination: Maturity differential is {abs(latest_dte_diff)} days (> 45 days). Carry financing risk dominates.")
+        if (stale_a.iloc[-1] if not stale_a.empty else False) or (stale_b.iloc[-1] if not stale_b.empty else False):
+            reasons.append("Stale settlement pricing detected: Consecutive identical settlement prints prevent reliable relative-value execution.")
+            reasons.append("Stale settlement pricing detected: Consecutive identical settlement prints prevent reliable relative-value execution.")
+    elif current_z >= z_threshold:
+        # Leg A is statistically rich relative to Leg B
+        if latest_net_executable > 0:
+            signal_type = "SHORT_SPREAD"
+            signal_label = f"Short Spread (Sell {symbol_a}, Buy {symbol_b})"
+            is_actionable = True
+            reasons.append(
+                f"Statistically overvalued: Rolling z-score ({current_z:+.2f}σ) exceeds upper threshold (+{z_threshold:.2f}σ)."
+            )
+            reasons.append(
+                f"Gross spread is +₹{current_spread:.2f}/10g ({latest['pct_spread']:+.2f}% premium)."
+            )
+            if latest_dte_diff != 0:
+                reasons.append(
+                    f"Maturity carry drag of ₹{latest_carry_drag:.2f}/10g accounted for (DTE diff: {latest_dte_diff}d). "
+                    f"Maturity-adjusted spread is ₹{latest_mat_adj_spread:.2f}/10g."
+                )
+            reasons.append(
+                f"Estimated round-trip friction is ₹{computed_friction:.2f}/10g. "
+                f"Net executable edge is +₹{latest_net_executable:.2f}/10g."
+            )
+        else:
+            signal_type = "NO_SIGNAL"
+            signal_label = "No actionable signal (Friction-bound divergence)"
+            reasons.append(
+                f"Statistical divergence detected (z = {current_z:+.2f}σ > +{z_threshold:.2f}σ), but NOT executable."
+            )
+            reasons.append(
