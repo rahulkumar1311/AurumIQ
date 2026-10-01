@@ -225,3 +225,79 @@ def parse_mcx_bhavcopy_file(
             "status": "MALFORMED_FILE",
             "source": source,
             "requested_date": req_iso,
+            "actual_data_date": None,
+            "message": f"Malformed CSV structure: {str(e)}",
+            "records": [],
+            "raw_records": [],
+            "validation_report": None
+        }
+
+    # 3. Column name mapping
+    col_mapping = {col: map_column_name(col) for col in df.columns}
+    df = df.rename(columns=col_mapping)
+
+    required_cols = ["symbol", "trade_date", "expiry_date", "open", "high", "low", "close"]
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        return {
+            "success": False,
+            "status": "MISSING_COLUMNS",
+            "source": source,
+            "requested_date": req_iso,
+            "actual_data_date": None,
+            "message": f"Missing required Bhavcopy columns: {missing}. Available: {list(df.columns)}",
+            "records": [],
+            "raw_records": [],
+            "validation_report": None
+        }
+
+    if "volume" not in df.columns:
+        df["volume"] = 0
+    if "open_interest" not in df.columns:
+        df["open_interest"] = 0
+
+    # 4. Filter for our target gold contracts with stripped symbol padding
+    allowed_symbols = {"GOLDM", "GOLDTEN", "GOLDGUINEA", "GOLDPETAL"}
+    
+    # Raw symbol stripping
+    df["raw_symbol"] = df["symbol"].astype(str)
+    df["clean_symbol"] = df["raw_symbol"].str.strip().str.upper()
+    df_gold = df[df["clean_symbol"].isin(allowed_symbols)].copy()
+
+    if df_gold.empty:
+        return {
+            "success": False,
+            "status": "NO_GOLD_CONTRACTS",
+            "source": source,
+            "requested_date": req_iso,
+            "actual_data_date": None,
+            "message": "No MCX Gold contracts (GOLDM, GOLDTEN, GOLDGUINEA, GOLDPETAL) found in file.",
+            "records": [],
+            "raw_records": [],
+            "validation_report": {
+                "total_extracted": len(df),
+                "valid_count": 0,
+                "rejected_count": len(df),
+                "duplicate_count": 0,
+                "rejected_samples": [{"reason": "Non-gold commodity contracts skipped"}]
+            }
+        }
+
+    # 5. Process and validate rows
+    valid_market_records = []
+    raw_audit_records = []
+    rejections = []
+    seen_contract_keys = set()
+    duplicate_count = 0
+    detected_trade_dates = set()
+
+    for idx, row in df_gold.iterrows():
+        raw_sym = str(row["raw_symbol"])
+        clean_sym = str(row["clean_symbol"])
+        raw_t_date = str(row["trade_date"])
+        raw_exp_date = str(row["expiry_date"])
+        
+        row_json = {
+            "symbol": raw_sym,
+            "trade_date": raw_t_date,
+            "expiry_date": raw_exp_date,
