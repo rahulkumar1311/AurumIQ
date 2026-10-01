@@ -210,3 +210,35 @@ class ContractNormalizationEngine:
         Generates comprehensive normalization assumptions documentation.
         """
         specs_report = []
+        for sym in ["GOLDM", "GOLDTEN", "GOLDGUINEA", "GOLDPETAL"]:
+            factors = self.get_factors(sym)
+            specs_report.append(factors)
+            
+        guinea_factor = specs_report[2]["purity_multiplier"]
+        return {
+            "reference_standard": {
+                "weight_grams": self.config.reference_weight_grams,
+                "purity_fineness": self.config.reference_purity,
+                "description": f"Standardized to INR per {self.config.reference_weight_grams}g of {self.config.reference_purity} fine gold equivalent"
+            },
+            "purity_convention": {
+                "active_convention": self.config.purity_convention,
+                "GOLDM": "995 Fineness (Official MCX wholesale standard). Purity factor = 999 / 995 ≈ 1.0040201",
+                "GOLDTEN": "999 Fineness (Official MCX Circular MCX/TRD/714/2024). Purity factor = 999 / 999 = 1.000000",
+                "GOLDGUINEA": (
+                    f"{specs_report[2]['contract_purity']} Fineness "
+                    f"({'Official MCX deliverable specification' if self.config.purity_convention == 'OFFICIAL_MCX' else 'Problem Statement #03 assumption'}). "
+                    f"Purity factor = 999 / {specs_report[2]['contract_purity']} ≈ {guinea_factor:.7f}"
+                ),
+                "GOLDPETAL": "999 Fineness (Official MCX 1g blister card). Purity factor = 999 / 999 = 1.000000",
+                "flagged_assumption": "Problem Statement #03 assumed GOLDGUINEA purity is 999, while official MCX specification is 995 fineness.",
+                "notes": self.config.purity_convention_note,
+                "mcx_verification": self.config.mcx_verification_note
+            },
+            "audit_metadata": {
+                "audit_date": "2026-10-04",
+                "official_source_url": "https://www.mcxindia.com/products/bullion/gold",
+                "mcx_circular_references": [
+                    "MCX/TRD/714/2024 (Launch of Gold Ten 10g 999 Fineness Futures)",
+                    "MCX Gold Mini Product Specification (100g, 995 Fineness, 5th Day Expiry)",
+                    "MCX Gold Guinea Product Specification (8g, 995 Fineness, Month-End Expiry)",
