@@ -361,3 +361,64 @@ def parse_mcx_bhavcopy_file(
                 "raw": row_json
             })
             continue
+        seen_contract_keys.add(contract_key)
+
+        # Validate numeric fields
+        try:
+            open_p = clean_numeric(row["open"], "Open Price")
+            high_p = clean_numeric(row["high"], "High Price")
+            low_p = clean_numeric(row["low"], "Low Price")
+            close_p = clean_numeric(row["close"], "Close Price")
+            vol = int(clean_numeric(row["volume"], "Volume", allow_zero=True))
+            oi = int(clean_numeric(row["open_interest"], "Open Interest", allow_zero=True))
+        except ValueError as e:
+            rejections.append({"row_index": idx, "reason": str(e), "raw": row_json})
+            raw_audit_records.append({
+                "raw_symbol": raw_sym, "clean_symbol": clean_sym,
+                "raw_trade_date": raw_t_date, "clean_trade_date": clean_t_date,
+                "raw_expiry_date": raw_exp_date, "clean_expiry_date": clean_exp_date,
+                "contract_id": f"{clean_sym}_{clean_exp_date}",
+                "open": None, "high": None, "low": None, "close": None,
+                "volume": 0, "open_interest": 0, "is_valid": 0, "validation_error": str(e)
+            })
+            continue
+
+        # OHLC Sanity Check
+        eps = 0.01
+        if high_p + eps < low_p:
+            err = f"High ({high_p}) is lower than Low ({low_p})"
+            rejections.append({"row_index": idx, "reason": err, "raw": row_json})
+            continue
+        if high_p + eps < open_p or high_p + eps < close_p:
+            err = f"High ({high_p}) is lower than Open ({open_p}) or Close ({close_p})"
+            rejections.append({"row_index": idx, "reason": err, "raw": row_json})
+            continue
+        if low_p - eps > open_p or low_p - eps > close_p:
+            err = f"Low ({low_p}) is higher than Open ({open_p}) or Close ({close_p})"
+            rejections.append({"row_index": idx, "reason": err, "raw": row_json})
+            continue
+
+        # Normalization and Contract Spec checks
+        spec = CONTRACT_SPECS[clean_sym]
+        norm_10g = close_p * spec.multiplier_to_10g
+        purity_adj_10g = norm_10g * (999.0 / spec.purity)
+        
+        t_dt_obj = datetime.strptime(clean_t_date, "%Y-%m-%d")
+        exp_dt_obj = datetime.strptime(clean_exp_date, "%Y-%m-%d")
+        dte = max(1, (exp_dt_obj - t_dt_obj).days)
+
+        # Sanity price bounds for MCX Gold per 10g (₹30,000 to ₹180,000)
+        if norm_10g < 30000 or norm_10g > 180000:
+            err = f"Normalized price ₹{norm_10g:.2f}/10g outside plausible MCX bounds (₹30k - ₹180k)"
+            rejections.append({"row_index": idx, "reason": err, "raw": row_json})
+            continue
+
+        contract_id = f"{clean_sym}_{clean_exp_date}"
+        
+        valid_market_records.append({
+            "symbol": clean_sym,
+            "trade_date": clean_t_date,
+            "expiry_date": clean_exp_date,
+            "contract_id": contract_id,
+            "open": round(open_p, 2),
+            "high": round(high_p, 2),
