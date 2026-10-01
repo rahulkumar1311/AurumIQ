@@ -422,3 +422,48 @@ def parse_mcx_bhavcopy_file(
             "contract_id": contract_id,
             "open": round(open_p, 2),
             "high": round(high_p, 2),
+            "low": round(low_p, 2),
+            "close": round(close_p, 2),
+            "volume": vol,
+            "open_interest": oi,
+            "normalized_close_10g": round(norm_10g, 2),
+            "purity_adjusted_10g": round(purity_adj_10g, 2),
+            "dte": dte,
+            "implied_basis_pct": 0.0  # Will be calibrated relative to benchmark
+        })
+
+        raw_audit_records.append({
+            "raw_symbol": raw_sym,
+            "clean_symbol": clean_sym,
+            "raw_trade_date": raw_t_date,
+            "clean_trade_date": clean_t_date,
+            "raw_expiry_date": raw_exp_date,
+            "clean_expiry_date": clean_exp_date,
+            "contract_id": contract_id,
+            "open": open_p,
+            "high": high_p,
+            "low": low_p,
+            "close": close_p,
+            "volume": vol,
+            "open_interest": oi,
+            "is_valid": 1,
+            "validation_error": None
+        })
+
+    # 6. Actual Data Date Validation against Requested Date
+    actual_data_date = None
+    if detected_trade_dates:
+        # Most frequent or latest trading date found in the file
+        actual_data_date = sorted(list(detected_trade_dates))[-1]
+
+    if req_iso and actual_data_date and (actual_data_date != req_iso):
+        # STRICT REQUIREMENT: Reject or flag responses whose actual date differs from requested date.
+        # Never silently treat an older trading day's data as the requested date!
+        err_msg = (
+            f"Date mismatch: requested {requested_date_str} ({req_iso}), "
+            f"but MCX Bhavcopy file contains data for {actual_data_date}. "
+            f"Silently treating older/different trading day data as requested date is strictly prohibited."
+        )
+        return {
+            "success": False,
+            "status": "DATE_MISMATCH",
