@@ -310,3 +310,68 @@ def calculate_spread_series(
             f"delivery margins and physical allocation. Non-delivery systematic relative-value trading is blocked."
         )
 
+    # Detect expiry cycle asymmetry (GOLDM 5th of month vs month-end contracts)
+    latest_carry_drag = float(latest["calendar_carry_drag"])
+    is_goldm_paired = ("GOLDM" in (symbol_a, symbol_b)) and (symbol_a != symbol_b)
+    if is_goldm_paired and abs(int(latest["dte_diff"])) > 0 and not is_extreme_dte_diff:
+        other_sym = symbol_b if symbol_a == "GOLDM" else symbol_a
+        data_quality_warnings.append(
+            f"Expiry Cycle Asymmetry: GOLDM expires on the 5th of the month, while {other_sym} expires at month-end. "
+            f"Maturity gap is {abs(int(latest['dte_diff']))} days. Carry financing drag (₹{latest_carry_drag:.2f}/10g) "
+            f"is applied to adjust for this calendar basis."
+        )
+
+    if is_extreme_dte_diff:
+        data_quality_warnings.append(
+            f"Unsuitable expiry combination: Maturity differential is {abs(int(latest['dte_diff']))} days (> 45 days). "
+            f"Carry financing uncertainty and roll asymmetry dominate relative product valuation."
+        )
+
+    # Check zero variance
+    if bool(latest["zero_variance"]):
+        data_quality_warnings.append(
+            "Zero spread variance: Spread remained constant over the lookback window. Standard deviation is zero."
+        )
+
+    # 6. Ornstein-Uhlenbeck Half-Life & Stationarity Diagnostics
+    spread_values = merged["spread"].values
+    half_life_days = None
+    adf_tstat = None
+    is_stationary = False
+
+    if len(spread_values) >= 10:
+        dy = np.diff(spread_values)
+        y_prev = spread_values[:-1]
+        A = np.vstack([y_prev, np.ones(len(y_prev))]).T
+        res = np.linalg.lstsq(A, dy, rcond=None)
+        beta, alpha = res[0]
+        residuals = dy - (beta * y_prev + alpha)
+        
+        denom = (np.sqrt(np.sum((y_prev - np.mean(y_prev))**2)) + 1e-9)
+        s_err = np.sqrt(np.sum(residuals**2) / max(1, (len(dy) - 2))) / denom
+        t_stat = beta / (s_err + 1e-9)
+        adf_tstat = round(float(t_stat), 3)
+        is_stationary = adf_tstat < -2.89
+
+        if beta < 0:
+            if 1 + beta > 0:
+                log_val = np.log(1 + beta)
+                if abs(log_val) > 1e-9:
+                    half_life_days = round(float(-np.log(2) / log_val), 1)
+                else:
+                    half_life_days = None
+            else:
+                half_life_days = 0.5
+
+    # 7. Diagnostic Signal Generation Logic
+    current_spread = float(latest["spread"])
+    current_z = float(latest["z_score"])
+    valid_z = bool(latest["valid_z"])
+    latest_net_executable = float(latest["net_executable_spread"])
+    latest_mat_adj_spread = float(latest["maturity_adjusted_spread"])
+    latest_carry_drag = float(latest["calendar_carry_drag"])
+    latest_dte_diff = int(latest["dte_diff"])
+
+    # Point-in-time percentile rank up to current index
+    pct_rank = float((spread_values <= current_spread).mean() * 100.0)
+
