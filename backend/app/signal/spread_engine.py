@@ -492,3 +492,48 @@ def calculate_spread_series(
                 f"(₹{latest['rolling_mean']:.2f} ± ₹{latest['rolling_std']:.2f})."
             )
 
+    # Expiry notice
+    is_fully_matched = bool(merged["is_matched_expiry"].all())
+    if is_fully_matched:
+        expiry_status = "MATCHED_EXPIRY"
+        carry_notice = f"Both contracts share identical maturity ({latest['expiry_a']}). Pure product/purity basis."
+    else:
+        expiry_status = "CALENDAR_SPREAD_DIFFERENTIAL"
+        carry_notice = (
+            f"Different maturities: {symbol_a} ({latest['expiry_a']}, {latest['dte_a']}d) vs "
+            f"{symbol_b} ({latest['expiry_b']}, {latest['dte_b']}d). "
+            f"Net maturity difference is {latest_dte_diff} days. "
+            f"Calendar carry drag of ₹{latest_carry_drag:.2f}/10g modeled at {annual_financing_rate*100:.1f}% p.a."
+        )
+
+    # History start & GOLDTEN listing note
+    history_note = None
+    if symbol_a == "GOLDTEN" or symbol_b == "GOLDTEN":
+        history_note = (
+            "GOLDTEN listed on MCX in late 2025. Analysis starts strictly from the earliest "
+            f"verified overlapping trading date ({merged.iloc[0]['trade_date']}) without fabricating prior observations."
+        )
+
+    # Regulatory & Analytical Disclaimer
+    compliance_disclaimer = (
+        "ANALYTICAL INFORMATION ONLY — NOT A GUARANTEED TRADE RECOMMENDATION. "
+        "Statistical mispricing indicators and rolling z-scores do not guarantee price convergence or risk-free arbitrage. "
+        "Realized basis can diverge further due to physical delivery frictions, margin variation, liquidity shocks, "
+        "and financing carry rate shifts."
+    )
+
+    stats = {
+        "symbol_a": symbol_a,
+        "symbol_b": symbol_b,
+        "lookback_period": lookback,
+        "z_threshold": z_threshold,
+        "exit_threshold": exit_threshold,
+        "min_observations": min_observations,
+        "latest_date": str(latest["trade_date"]),
+        "current_spread": round(current_spread, 2),
+        "current_pct_spread": round(float(latest["pct_spread"]), 3),
+        "current_z_score": round(current_z, 2),
+        "mean_spread": round(float(merged["spread"].mean()), 2),
+        "std_spread": round(float(merged["spread"].std()), 2),
+        "min_spread": round(float(merged["spread"].min()), 2),
+        "max_spread": round(float(merged["spread"].max()), 2),
