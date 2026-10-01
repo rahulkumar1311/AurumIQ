@@ -95,3 +95,88 @@ def calculate_spread_series(
             if alt in df.columns:
                 return pd.to_numeric(df[alt], errors="coerce").fillna(default_val)
         return pd.Series(default_val, index=df.index, dtype=float)
+
+    raw_close_a = _get_series(df_a, "raw_close", ["close"], 0.0)
+    raw_close_b = _get_series(df_b, "raw_close", ["close"], 0.0)
+
+    sub_a = pd.DataFrame({
+        "trade_date": df_a["trade_date"].astype(str),
+        "price_a": _get_series(df_a, price_col, ["purity_adjusted_10g", "normalized_close_10g", "close", "raw_close"]),
+        "raw_close_a": raw_close_a,
+        "expiry_a": df_a["expiry_date"].astype(str) if "expiry_date" in df_a.columns else "",
+        "volume_a": pd.to_numeric(df_a["volume"], errors="coerce").fillna(0) if "volume" in df_a.columns else 0,
+        "oi_a": pd.to_numeric(df_a["open_interest"], errors="coerce").fillna(0) if "open_interest" in df_a.columns else 0,
+        "dte_a": pd.to_numeric(df_a["dte"], errors="coerce").fillna(0) if "dte" in df_a.columns else 0,
+    })
+    sub_b = pd.DataFrame({
+        "trade_date": df_b["trade_date"].astype(str),
+        "price_b": _get_series(df_b, price_col, ["purity_adjusted_10g", "normalized_close_10g", "close", "raw_close"]),
+        "raw_close_b": raw_close_b,
+        "expiry_b": df_b["expiry_date"].astype(str) if "expiry_date" in df_b.columns else "",
+        "volume_b": pd.to_numeric(df_b["volume"], errors="coerce").fillna(0) if "volume" in df_b.columns else 0,
+        "oi_b": pd.to_numeric(df_b["open_interest"], errors="coerce").fillna(0) if "open_interest" in df_b.columns else 0,
+        "dte_b": pd.to_numeric(df_b["dte"], errors="coerce").fillna(0) if "dte" in df_b.columns else 0,
+    })
+
+    # Merge strictly on trade_date (Inner join ensures overlapping dates only)
+    merged = pd.merge(sub_a, sub_b, on="trade_date", how="inner").sort_values("trade_date").reset_index(drop=True)
+    
+    data_quality_warnings: List[str] = []
+    
+    if len(merged) < min_observations:
+        data_quality_warnings.append(
+            f"Insufficient history: Only {len(merged)} overlapping trading dates found. At least {min_observations} required."
+        )
+        return {
+            "series": [],
+            "statistics": None,
+            "data_quality_warnings": data_quality_warnings,
+            "signal": {
+                "signal_type": "NO_SIGNAL",
+                "signal_label": "No actionable signal",
+                "is_actionable": False,
+                "reasons": [f"Insufficient historical observations ({len(merged)} available, {min_observations} required)."]
+            },
+            "message": f"Only {len(merged)} overlapping dates found. At least {min_observations} required."
+        }
+
+    # 1. Gross Spread & Percentage Premium/Discount
+    merged["spread"] = (merged["price_a"] - merged["price_b"]).round(2)
+    merged["pct_spread"] = ((merged["spread"] / merged["price_b"].replace(0, np.nan)) * 100.0).round(3).fillna(0.0)
+
+    # 2. Maturity & Carry Accounting
+    merged["is_matched_expiry"] = merged["expiry_a"] == merged["expiry_b"]
+    merged["dte_diff"] = (merged["dte_a"] - merged["dte_b"]).astype(int)
+    
+    # Theoretical calendar carry drag per 10g:
+    # Carry Drag = Price_B * r * (DTE_A - DTE_B) / 365
+    merged["calendar_carry_drag"] = (
+        merged["price_b"] * annual_financing_rate * (merged["dte_diff"] / 365.0)
+    ).round(2)
+    
+    # Maturity-Adjusted Residual Spread = Spread - Calendar Carry Drag
+    merged["maturity_adjusted_spread"] = (merged["spread"] - merged["calendar_carry_drag"]).round(2)
+
+    # 3. Estimated Round-Trip Friction & Net Executable Spread
+    avg_price = float(merged["price_a"].mean()) if not merged["price_a"].empty else 75000.0
+    computed_friction = estimate_round_trip_friction(symbol_a, symbol_b, avg_price) if friction_per_10g is None else friction_per_10g
+    merged["estimated_friction"] = computed_friction
+    
+    # Net Executable Spread: Positive if spread magnitude exceeds friction & carry drag
+    merged["net_executable_spread"] = (
+        merged["maturity_adjusted_spread"].abs() - computed_friction
+    ).round(2)
+
+    # 4. Point-in-Time Rolling Statistics (STRICT ZERO LOOK-AHEAD BIAS)
+    # Using window up to current index i without backward filling or forward leakage
+    n_rows = len(merged)
+    rolling_means = [np.nan] * n_rows
+    rolling_stds = [np.nan] * n_rows
+    z_scores = [0.0] * n_rows
+    valid_z_flags = [False] * n_rows
+    zero_variance_flags = [False] * n_rows
+
+    spreads_array = merged["spread"].values
+    for i in range(n_rows):
+        start_idx = max(0, i - lookback + 1)
+        window = spreads_array[start_idx : i + 1]
