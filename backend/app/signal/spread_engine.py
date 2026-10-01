@@ -245,3 +245,68 @@ def calculate_spread_series(
     if missing_in_b:
         data_quality_warnings.append(
             f"Missing observations: {len(missing_in_b)} trading session(s) present in {symbol_a} are missing in {symbol_b}."
+        )
+    if missing_in_a:
+        data_quality_warnings.append(
+            f"Missing observations: {len(missing_in_a)} trading session(s) present in {symbol_b} are missing in {symbol_a}."
+        )
+
+    # Check stale observations (consecutive identical prices >= 3 days)
+    stale_a = (merged["price_a"].diff() == 0) & (merged["price_a"].diff().shift(1) == 0)
+    stale_b = (merged["price_b"].diff() == 0) & (merged["price_b"].diff().shift(1) == 0)
+    if stale_a.any():
+        data_quality_warnings.append(
+            f"Stale pricing detected in {symbol_a}: 3 or more consecutive sessions with identical settlement prices."
+        )
+    if stale_b.any():
+        data_quality_warnings.append(
+            f"Stale pricing detected in {symbol_b}: 3 or more consecutive sessions with identical settlement prices."
+        )
+
+    # Outlier detection: Identify anomalous spread jumps relative to rolling spread volatility (> 3.5 sigma)
+    spread_diffs = merged["spread"].diff().abs()
+    rolling_diff_std = spread_diffs.rolling(window=min(lookback, 15), min_periods=5).std()
+    for idx in range(1, len(merged)):
+        s_diff = spread_diffs.iloc[idx]
+        local_std = rolling_diff_std.iloc[idx - 1] if idx > 1 else np.nan
+        if not np.isnan(local_std) and local_std > 1e-4:
+            if s_diff > 3.5 * local_std and s_diff > 25.0:
+                outlier_date = merged.iloc[idx]["trade_date"]
+                data_quality_warnings.append(
+                    f"Outlier observation detected on {outlier_date}: single-session spread change of ₹{s_diff:.2f}/10g exceeds 3.5σ ({s_diff/local_std:.1f}σ). Possible bad tick, auction imbalance, or illiquid print."
+                )
+
+    latest = merged.iloc[-1]
+    
+    # Check thin trading
+    is_thin_a = latest["volume_a"] < 5
+    is_thin_b = latest["volume_b"] < 5
+    if is_thin_a:
+        data_quality_warnings.append(
+            f"Thin trading in {symbol_a}: Latest trading volume is {int(latest['volume_a'])} lots (below liquidity threshold of 5)."
+        )
+    if is_thin_b:
+        data_quality_warnings.append(
+            f"Thin trading in {symbol_b}: Latest trading volume is {int(latest['volume_b'])} lots (below liquidity threshold of 5)."
+        )
+    if latest["oi_a"] < 10 or latest["oi_b"] < 10:
+        data_quality_warnings.append(
+            f"Low open interest: {symbol_a} OI={int(latest['oi_a'])}, {symbol_b} OI={int(latest['oi_b'])} contracts."
+        )
+
+    # Check unsuitable expiry combinations and tender period constraints
+    is_expired = latest["dte_a"] <= 0 or latest["dte_b"] <= 0
+    in_tender_period = (latest["dte_a"] <= 3) or (latest["dte_b"] <= 3)
+    is_extreme_dte_diff = abs(int(latest["dte_diff"])) > 45
+
+    if is_expired:
+        data_quality_warnings.append(
+            "Unsuitable expiry: One or both contracts have reached or passed their expiration date (DTE <= 0)."
+        )
+    elif in_tender_period:
+        data_quality_warnings.append(
+            f"Physical delivery tender period active: Near contract has DTE <= 3d (Leg A DTE={int(latest['dte_a'])}, "
+            f"Leg B DTE={int(latest['dte_b'])}). Under MCX compulsory delivery rules, positions are subject to "
+            f"delivery margins and physical allocation. Non-delivery systematic relative-value trading is blocked."
+        )
+
