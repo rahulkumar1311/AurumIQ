@@ -192,3 +192,58 @@ def get_cross_contract(expiry_filter: Optional[str] = None) -> Dict[str, Any]:
             WHERE trade_date = ?
             ORDER BY symbol, dte ASC;
         """, (max_date,))
+        basis_curve = [dict(r) for r in cursor.fetchall()]
+        
+        # Liquidity aggregates
+        cursor.execute("""
+            SELECT symbol, SUM(volume) as total_volume, AVG(open_interest) as avg_oi,
+                   AVG(volume) as avg_daily_volume
+            FROM market_data
+            GROUP BY symbol;
+        """)
+        liquidity = [dict(r) for r in cursor.fetchall()]
+        
+    return {
+        "has_data": True,
+        "latest_date": max_date,
+        "history": history,
+        "history_purity_adjusted": history_purity,
+        "basis_curve": basis_curve,
+        "liquidity": liquidity
+    }
+
+# ----------------- Expiry Dates Query -----------------
+@router.get("/expiries")
+def get_available_expiries() -> Dict[str, Any]:
+    """Returns available trading expiries for each contract in local database."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT symbol, expiry_date FROM market_data ORDER BY symbol, expiry_date ASC;")
+        rows = cursor.fetchall()
+        result: Dict[str, List[str]] = {}
+        for r in rows:
+            sym = r["symbol"]
+            exp = r["expiry_date"]
+            if sym not in result:
+                result[sym] = []
+            result[sym].append(exp)
+        return {"expiries": result}
+
+# ----------------- Historical Spread & Relative-Value Analysis -----------------
+@router.get("/spreads")
+def get_spreads(
+    pair_a: str = "GOLDM",
+    expiry_a: Optional[str] = None,
+    pair_b: str = "GOLDPETAL",
+    expiry_b: Optional[str] = None,
+    lookback: int = 20,
+    purity_adjusted: bool = False,
+    z_threshold: float = 2.0,
+    exit_threshold: float = 0.5,
+    min_observations: int = 10,
+    friction_per_10g: Optional[float] = None
+) -> Dict[str, Any]:
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as cnt FROM market_data;")
+        if cursor.fetchone()["cnt"] == 0:
