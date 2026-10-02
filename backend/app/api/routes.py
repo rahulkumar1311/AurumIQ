@@ -491,3 +491,31 @@ def _validate_uploaded_file(file: UploadFile, content: bytes) -> None:
         raise HTTPException(
             status_code=413,
             detail="File size exceeds maximum permitted limit of 25MB."
+        )
+
+@router.post("/bhavcopy/upload")
+async def upload_mcx_bhavcopy(
+    file: UploadFile = File(...),
+    requested_date: Optional[str] = Form(None)
+) -> Dict[str, Any]:
+    """
+    Imports uploaded MCX Bhavcopy CSV file with date validation against requested_date.
+    Strips symbol padding, parses compact expiries, detects duplicates and date mismatches.
+    """
+    content = await file.read()
+    _validate_uploaded_file(file, content)
+    csv_text = content.decode("utf-8", errors="ignore")
+    parse_res = parse_mcx_bhavcopy_file(
+        content=csv_text,
+        requested_date_str=requested_date,
+        source=f"CSV_UPLOAD ({file.filename})"
+    )
+    import_id = save_bhavcopy_import_audit(parse_res, source=f"CSV_UPLOAD ({file.filename})")
+    parse_res["import_id"] = import_id
+    return parse_res
+
+@router.get("/bhavcopy/imports")
+def get_bhavcopy_import_history() -> Dict[str, Any]:
+    """Returns recent bhavcopy ingestion audit history."""
+    imports = get_recent_bhavcopy_imports(limit=25)
+    return {
