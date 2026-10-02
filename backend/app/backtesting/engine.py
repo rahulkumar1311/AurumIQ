@@ -546,3 +546,97 @@ def simulate_contract_pairs(
             "capital": round(current_capital, 2),
             "drawdown_pct": round(dd_pct, 2),
             "drawdown_inr": round(dd_inr, 2),
+            "position": position,
+            "active_contract_a": active_expiry_a or "-",
+            "active_contract_b": active_expiry_b or "-"
+        })
+
+    # Align benchmark daily returns
+    bench_rets = None
+    if benchmark_df is not None and not benchmark_df.empty:
+        b_df = benchmark_df.copy()
+        b_df["trade_date"] = b_df["trade_date"].astype(str)
+        b_sub = b_df[b_df["trade_date"].isin(dates)].sort_values("trade_date").drop_duplicates("trade_date")
+        if len(b_sub) > 1:
+            price_series = b_sub["normalized_close_10g"] if "normalized_close_10g" in b_sub else b_sub["close"]
+            bench_rets = price_series.pct_change().dropna()
+
+    metrics = compute_performance_metrics(trades, equity_curve, initial_capital, bench_rets)
+    return {
+        "success": True,
+        "metrics": metrics,
+        "trades": trades,
+        "equity_curve": equity_curve
+    }
+
+
+def fit_parameters_on_development(
+    df_a: pd.DataFrame,
+    df_b: pd.DataFrame,
+    pair_a: str,
+    pair_b: str,
+    dev_dates: List[str],
+    candidate_params: Optional[List[Dict[str, Any]]] = None,
+    initial_capital: float = 500000.0,
+    include_friction: bool = True
+) -> Dict[str, Any]:
+    """
+    Fits/calibrates signal parameters strictly on the Development window.
+    Evaluates grid of candidate parameters and freezes the optimal parameter set
+    based on In-Sample Sharpe Ratio and Net PnL.
+    """
+    if candidate_params is None or len(candidate_params) == 0:
+        # Default parameter search space
+        candidate_params = [
+            {"entry_z": 1.2, "exit_z": 0.2, "lookback": 15, "stop_loss_z": 3.0},
+            {"entry_z": 1.5, "exit_z": 0.2, "lookback": 20, "stop_loss_z": 3.0},
+            {"entry_z": 1.8, "exit_z": 0.3, "lookback": 20, "stop_loss_z": 3.5},
+            {"entry_z": 2.0, "exit_z": 0.5, "lookback": 20, "stop_loss_z": 3.5},
+            {"entry_z": 2.2, "exit_z": 0.5, "lookback": 25, "stop_loss_z": 4.0},
+        ]
+        
+    best_params = candidate_params[0]
+    best_score = -999.0
+    fit_audit = []
+    
+    for p in candidate_params:
+        sim = simulate_contract_pairs(
+            df_a_all=df_a,
+            df_b_all=df_b,
+            pair_a=pair_a,
+            pair_b=pair_b,
+            dates=dev_dates,
+            entry_z=p["entry_z"],
+            exit_z=p["exit_z"],
+            stop_loss_z=p["stop_loss_z"],
+            lookback=p["lookback"],
+            initial_capital=initial_capital,
+            include_friction=include_friction
+        )
+        if sim["success"] and sim["metrics"]:
+            m = sim["metrics"]
+            # Composite objective: Sharpe ratio + normalized return, penalizing zero trades
+            trades_cnt = m["total_trades"]
+            if trades_cnt > 0:
+                score = m["sharpe_ratio"] * 2.0 + (m["total_return_pct"] / 5.0)
+            else:
+                score = -10.0
+                
+            fit_audit.append({
+                "params": p,
+                "trades": trades_cnt,
+                "net_pnl": m["total_net_pnl"],
+                "sharpe": m["sharpe_ratio"],
+                "score": round(score, 3)
+            })
+            
+            if score > best_score:
+                best_score = score
+                best_params = p
+
+    return {
+        "frozen_params": best_params,
+        "calibration_audit": fit_audit
+    }
+
+
