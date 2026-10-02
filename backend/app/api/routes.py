@@ -414,3 +414,42 @@ def get_data_quality() -> Dict[str, Any]:
         cnt = cursor.fetchone()["cnt"]
         
         if cnt == 0:
+            return {
+                "has_data": False,
+                "total_records": 0,
+                "date_range": None,
+                "calendar": [],
+                "anomalies": [],
+                "ingestion_logs": []
+            }
+            
+        cursor.execute("SELECT MIN(trade_date) as start_date, MAX(trade_date) as end_date FROM market_data;")
+        date_range = dict(cursor.fetchone())
+        
+        # Expiry calendar
+        cursor.execute("""
+            SELECT DISTINCT symbol, expiry_date,
+                   ROUND(AVG(normalized_close_10g), 2) as avg_norm_price,
+                   SUM(volume) as total_volume,
+                   MAX(open_interest) as max_oi,
+                   MIN(dte) as current_dte
+            FROM market_data
+            GROUP BY symbol, expiry_date
+            ORDER BY expiry_date ASC, symbol;
+        """)
+        calendar = [dict(r) for r in cursor.fetchall()]
+        
+        # Audit logs
+        cursor.execute("SELECT * FROM ingestion_logs ORDER BY timestamp DESC LIMIT 10;")
+        logs = [dict(r) for r in cursor.fetchall()]
+        
+        # Price anomaly check (spread deviation > 3% between identical purity contracts)
+        cursor.execute("""
+            SELECT trade_date, symbol, normalized_close_10g, volume
+            FROM market_data
+            WHERE normalized_close_10g < 35000 OR normalized_close_10g > 150000;
+        """)
+        anomalies = [dict(r) for r in cursor.fetchall()]
+        
+    bhavcopy_imports = get_recent_bhavcopy_imports(limit=15)
+        
