@@ -782,3 +782,60 @@ def run_spread_backtest(
 
     # Compile Split Metrics
     splits_payload = {
+        "development": {
+            "period_name": "Development (In-Sample)",
+            "start_date": dates_dev[0],
+            "end_date": dates_dev[-1],
+            "trading_days": len(dates_dev),
+            "parameters": frozen_params,
+            "metrics": sim_dev["metrics"],
+            "trade_count": len(sim_dev["trades"])
+        },
+        "validation": {
+            "period_name": "Validation (Calibration / Selection)",
+            "start_date": dates_val[0],
+            "end_date": dates_val[-1],
+            "trading_days": len(dates_val),
+            "parameters": frozen_params,
+            "metrics": sim_val["metrics"],
+            "trade_count": len(sim_val["trades"])
+        },
+        "unseen_test": {
+            "period_name": "Final Unseen Test (Out-of-Sample)",
+            "start_date": dates_test[0],
+            "end_date": dates_test[-1],
+            "trading_days": len(dates_test),
+            "parameters": frozen_params,
+            "metrics": sim_test["metrics"],
+            "trade_count": len(sim_test["trades"])
+        }
+    }
+
+    # Assumptions & Limitations Documentation
+    assumptions_payload = {
+        "regulatory_cost_model": {
+            "mcx_turnover_fee_pct": MCX_TURNOVER_FEE_PCT,
+            "ctt_sell_side_pct": CTT_SELL_PCT,
+            "stamp_duty_buy_side_pct": STAMP_DUTY_BUY_PCT,
+            "brokerage_pct": BROKERAGE_PCT,
+            "gst_pct": GST_PCT
+        },
+        "slippage_estimates_inr_per_10g": DEFAULT_SLIPPAGE_MAP,
+        "settlement_price_limitation": SETTLEMENT_PRICE_LIMITATION_DISCLOSURE,
+        "unmodeled_unknown_costs": UNKNOWN_COSTS_DISCLOSURE,
+        "frozen_parameters": frozen_params,
+        "expiry_roll_buffer_days": expiry_buffer_days,
+        "chronological_partitions": {
+            "development_dates": f"{dates_dev[0]} to {dates_dev[-1]} ({len(dates_dev)} days)",
+            "validation_dates": f"{dates_val[0]} to {dates_val[-1]} ({len(dates_val)} days)",
+            "unseen_test_dates": f"{dates_test[0]} to {dates_test[-1]} ({len(dates_test)} days)"
+        }
+    }
+
+    # Final Combined Output
+    full_metrics = sim_full["metrics"]
+    full_metrics.update({
+        "pair_a": pair_a,
+        "pair_b": pair_b,
+        "strategy_name": f"Walk-Forward Spread Arbitrage ({pair_a}/{pair_b})",
+        "lookback": active_lookback,
