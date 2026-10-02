@@ -303,3 +303,58 @@ def get_spreads(
     df_b = pd.DataFrame(rows_b)
     
     result = calculate_spread_series(
+        df_a=df_a,
+        df_b=df_b,
+        symbol_a=pair_a,
+        symbol_b=pair_b,
+        lookback=lookback,
+        use_purity_adjusted=purity_adjusted,
+        z_threshold=z_threshold,
+        exit_threshold=exit_threshold,
+        min_observations=min_observations,
+        friction_per_10g=friction_per_10g
+    )
+    
+    return {
+        "has_data": len(result.get("series", [])) > 0,
+        **result
+    }
+
+# ----------------- Backtesting Lab -----------------
+class BacktestRequest(BaseModel):
+    pair_a: str = "GOLDM"
+    pair_b: str = "GOLDPETAL"
+    entry_z: float = 1.5
+    exit_z: float = 0.2
+    stop_loss_z: float = 3.0
+    lookback: int = 20
+    initial_capital: float = 500000.0
+    use_purity_adjusted: bool = False
+    include_friction: bool = True
+    dev_ratio: float = 0.50
+    val_ratio: float = 0.25
+    test_ratio: float = 0.25
+    expiry_buffer_days: int = 3
+    auto_calibrate: bool = False
+
+@router.post("/backtest/run")
+def execute_backtest(req: BacktestRequest) -> Dict[str, Any]:
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as cnt FROM market_data;")
+        if cursor.fetchone()["cnt"] == 0:
+            return {
+                "has_data": False,
+                "success": False,
+                "message": "No market data loaded. Ingest data to perform backtest.",
+                "metrics": None,
+                "walk_forward_splits": None,
+                "trades": [],
+                "equity_curve": []
+            }
+            
+        cursor.execute("SELECT * FROM market_data WHERE symbol = ? ORDER BY trade_date ASC, dte ASC;", (req.pair_a,))
+        df_a = pd.DataFrame([dict(r) for r in cursor.fetchall()])
+        
+        cursor.execute("SELECT * FROM market_data WHERE symbol = ? ORDER BY trade_date ASC, dte ASC;", (req.pair_b,))
+        df_b = pd.DataFrame([dict(r) for r in cursor.fetchall()])
