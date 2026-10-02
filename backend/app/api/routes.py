@@ -247,3 +247,59 @@ def get_spreads(
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) as cnt FROM market_data;")
         if cursor.fetchone()["cnt"] == 0:
+            return {
+                "has_data": False,
+                "message": "No market data available.",
+                "series": [],
+                "statistics": None,
+                "signal": {
+                    "signal_type": "NO_SIGNAL",
+                    "signal_label": "No actionable signal",
+                    "is_actionable": False,
+                    "reasons": ["Database empty. Please load or ingest MCX data."]
+                },
+                "data_quality_warnings": ["Database contains 0 records."]
+            }
+            
+        # Extract series for pair_a (specific expiry or near-month minimum DTE)
+        if expiry_a and expiry_a.strip() and expiry_a.strip().lower() not in ("all", "near-month", "none", ""):
+            query_a = "SELECT * FROM market_data WHERE symbol = ? AND expiry_date = ? ORDER BY trade_date ASC;"
+            cursor.execute(query_a, (pair_a, expiry_a.strip()))
+        else:
+            query_a = """
+                SELECT m.*
+                FROM market_data m
+                INNER JOIN (
+                    SELECT trade_date, symbol, MIN(dte) as min_dte
+                    FROM market_data
+                    WHERE symbol = ?
+                    GROUP BY trade_date, symbol
+                ) sub ON m.trade_date = sub.trade_date AND m.symbol = sub.symbol AND m.dte = sub.min_dte
+                ORDER BY m.trade_date ASC;
+            """
+            cursor.execute(query_a, (pair_a,))
+        rows_a = [dict(r) for r in cursor.fetchall()]
+        
+        # Extract series for pair_b (specific expiry or near-month minimum DTE)
+        if expiry_b and expiry_b.strip() and expiry_b.strip().lower() not in ("all", "near-month", "none", ""):
+            query_b = "SELECT * FROM market_data WHERE symbol = ? AND expiry_date = ? ORDER BY trade_date ASC;"
+            cursor.execute(query_b, (pair_b, expiry_b.strip()))
+        else:
+            query_b = """
+                SELECT m.*
+                FROM market_data m
+                INNER JOIN (
+                    SELECT trade_date, symbol, MIN(dte) as min_dte
+                    FROM market_data
+                    WHERE symbol = ?
+                    GROUP BY trade_date, symbol
+                ) sub ON m.trade_date = sub.trade_date AND m.symbol = sub.symbol AND m.dte = sub.min_dte
+                ORDER BY m.trade_date ASC;
+            """
+            cursor.execute(query_b, (pair_b,))
+        rows_b = [dict(r) for r in cursor.fetchall()]
+        
+    df_a = pd.DataFrame(rows_a)
+    df_b = pd.DataFrame(rows_b)
+    
+    result = calculate_spread_series(
