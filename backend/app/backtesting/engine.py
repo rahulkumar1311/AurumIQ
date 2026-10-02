@@ -716,3 +716,69 @@ def run_spread_backtest(
             "success": False,
             "message": (
                 "Insufficient data for reliable validation: Split partition produces windows with fewer than "
+                f"{MIN_SPLIT_DATES} sessions. Increase dataset history or adjust split ratios."
+            ),
+            "metrics": None,
+            "walk_forward_splits": None,
+            "trades": [],
+            "equity_curve": []
+        }
+
+    # 1. Parameter Fitting on Development Window
+    if auto_calibrate:
+        fit_res = fit_parameters_on_development(
+            df_a=df_a, df_b=df_b, pair_a=pair_a, pair_b=pair_b,
+            dev_dates=dates_dev, initial_capital=initial_capital, include_friction=include_friction
+        )
+        frozen_params = fit_res["frozen_params"]
+    else:
+        frozen_params = {
+            "entry_z": entry_z,
+            "exit_z": exit_z,
+            "stop_loss_z": stop_loss_z,
+            "lookback": lookback
+        }
+
+    active_entry_z = float(frozen_params["entry_z"])
+    active_exit_z = float(frozen_params["exit_z"])
+    active_stop_loss_z = float(frozen_params["stop_loss_z"])
+    active_lookback = int(frozen_params["lookback"])
+
+    # 2. Simulate Development Window (In-Sample)
+    sim_dev = simulate_contract_pairs(
+        df_a_all=df_a, df_b_all=df_b, pair_a=pair_a, pair_b=pair_b,
+        dates=dates_dev, entry_z=active_entry_z, exit_z=active_exit_z, stop_loss_z=active_stop_loss_z,
+        lookback=active_lookback, initial_capital=initial_capital,
+        expiry_buffer_days=expiry_buffer_days, use_purity_adjusted=use_purity_adjusted,
+        include_friction=include_friction, benchmark_df=benchmark_df
+    )
+
+    # 3. Simulate Validation Window (Holdout 1 - Frozen Parameters)
+    sim_val = simulate_contract_pairs(
+        df_a_all=df_a, df_b_all=df_b, pair_a=pair_a, pair_b=pair_b,
+        dates=dates_val, entry_z=active_entry_z, exit_z=active_exit_z, stop_loss_z=active_stop_loss_z,
+        lookback=active_lookback, initial_capital=initial_capital,
+        expiry_buffer_days=expiry_buffer_days, use_purity_adjusted=use_purity_adjusted,
+        include_friction=include_friction, benchmark_df=benchmark_df
+    )
+
+    # 4. Simulate Final Unseen Test Window (Holdout 2 - Final Out-of-Sample)
+    sim_test = simulate_contract_pairs(
+        df_a_all=df_a, df_b_all=df_b, pair_a=pair_a, pair_b=pair_b,
+        dates=dates_test, entry_z=active_entry_z, exit_z=active_exit_z, stop_loss_z=active_stop_loss_z,
+        lookback=active_lookback, initial_capital=initial_capital,
+        expiry_buffer_days=expiry_buffer_days, use_purity_adjusted=use_purity_adjusted,
+        include_friction=include_friction, benchmark_df=benchmark_df
+    )
+
+    # 5. Full Horizon Continuous Run (With Real Contract Rolls)
+    sim_full = simulate_contract_pairs(
+        df_a_all=df_a, df_b_all=df_b, pair_a=pair_a, pair_b=pair_b,
+        dates=common_dates, entry_z=active_entry_z, exit_z=active_exit_z, stop_loss_z=active_stop_loss_z,
+        lookback=active_lookback, initial_capital=initial_capital,
+        expiry_buffer_days=expiry_buffer_days, use_purity_adjusted=use_purity_adjusted,
+        include_friction=include_friction, benchmark_df=benchmark_df
+    )
+
+    # Compile Split Metrics
+    splits_payload = {
