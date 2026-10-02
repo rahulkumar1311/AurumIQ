@@ -357,3 +357,97 @@ def simulate_contract_pairs(
                 z_scores[i] = 0.0
         else:
             z_scores[i] = 0.0
+    df_daily["z_score"] = np.round(z_scores, 2)
+
+    # Day-by-day simulation loop
+    for i in range(n_days):
+        row = df_daily.iloc[i]
+        d = row["trade_date"]
+        z = float(row["z_score"])
+        
+        # 1. Manage Existing Position
+        if position != 0:
+            # Query exact prices for the held physical contracts
+            match_a = df_a[(df_a["trade_date"] == d) & (df_a["expiry_date"] == active_expiry_a)]
+            match_b = df_b[(df_b["trade_date"] == d) & (df_b["expiry_date"] == active_expiry_b)]
+            
+            # If contract has expired or not in bhavcopy, fallback to daily representative
+            curr_p_a = float(match_a.iloc[0][price_col]) if not match_a.empty else float(row["price_a"])
+            curr_p_b = float(match_b.iloc[0][price_col]) if not match_b.empty else float(row["price_b"])
+            dte_a = int(match_a.iloc[0]["dte"]) if not match_a.empty else int(row["dte_a"])
+            dte_b = int(match_b.iloc[0]["dte"]) if not match_b.empty else int(row["dte_b"])
+            vol_a = int(match_a.iloc[0]["volume"]) if not match_a.empty else int(row["volume_a"])
+            vol_b = int(match_b.iloc[0]["volume"]) if not match_b.empty else int(row["volume_b"])
+            
+            should_exit = False
+            is_roll = False
+            exit_reason = ""
+            
+            # A. Contract Lifecycle & Tender Period Check (Mandatory Roll / Exit)
+            if dte_a <= expiry_buffer_days or dte_b <= expiry_buffer_days:
+                # Tender delivery buffer reached: Must roll or exit to avoid delivery penalties
+                next_cands_a = df_a[(df_a["trade_date"] == d) & (df_a["dte"] > expiry_buffer_days)]
+                next_cands_b = df_b[(df_b["trade_date"] == d) & (df_b["dte"] > expiry_buffer_days)]
+                
+                if not next_cands_a.empty and not next_cands_b.empty:
+                    # Execute authentic contract roll
+                    is_roll = True
+                    exit_reason = f"Contract Expiry Roll (Rolled from {active_expiry_a}/{active_expiry_b})"
+                else:
+                    should_exit = True
+                    exit_reason = "Mandatory Expiry Exit (Tender Buffer Reached, No Far Contract)"
+
+            # B. Statistical Exit Signals
+            if not is_roll and not should_exit:
+                if position == 1:  # Long Spread
+                    if z >= -exit_z:
+                        should_exit = True
+                        exit_reason = "Mean Reversion Target Achieved"
+                    elif z <= -stop_loss_z:
+                        should_exit = True
+                        exit_reason = "Stop Loss Boundary Breached"
+                elif position == -1:  # Short Spread
+                    if z <= exit_z:
+                        should_exit = True
+                        exit_reason = "Mean Reversion Target Achieved"
+                    elif z >= stop_loss_z:
+                        should_exit = True
+                        exit_reason = "Stop Loss Boundary Breached"
+
+            # C. Horizon End Check
+            if i == n_days - 1 and not should_exit and not is_roll:
+                should_exit = True
+                exit_reason = "Simulation Horizon End"
+
+            # Execute Exit or Roll
+            if should_exit or is_roll:
+                spread_diff_gross = (curr_p_a - curr_p_b) - (entry_price_a - entry_price_b)
+                gross_pnl = position * spread_diff_gross * units_10g
+                
+                # Exit friction
+                fric_exit_a = calculate_leg_friction(pair_a, curr_p_a, units_10g, is_buy=(position == -1), volume=vol_a, slippage_map=slippage_map, include_friction=include_friction)
+                fric_exit_b = calculate_leg_friction(pair_b, curr_p_b, units_10g, is_buy=(position == 1), volume=vol_b, slippage_map=slippage_map, include_friction=include_friction)
+                exit_friction = fric_exit_a["total_friction"] + fric_exit_b["total_friction"]
+                exit_turnover = (curr_p_a + curr_p_b) * units_10g
+                
+                total_trade_friction = trade_friction_acc + exit_friction
+                total_trade_turnover = trade_turnover_acc + exit_turnover
+                net_pnl = gross_pnl - total_trade_friction
+                
+                holding_days = max(1, i - entry_idx)
+                ret_pct = (net_pnl / current_capital) * 100.0 if current_capital > 0 else 0.0
+                current_capital += net_pnl
+                
+                trades.append({
+                    "trade_id": len(trades) + 1,
+                    "direction": "Long Spread" if position == 1 else "Short Spread",
+                    "contract_a": pair_a,
+                    "expiry_a": active_expiry_a,
+                    "contract_b": pair_b,
+                    "expiry_b": active_expiry_b,
+                    "entry_date": entry_date,
+                    "exit_date": d,
+                    "holding_days": holding_days,
+                    "entry_price_a": round(entry_price_a, 2),
+                    "entry_price_b": round(entry_price_b, 2),
+                    "exit_price_a": round(curr_p_a, 2),
