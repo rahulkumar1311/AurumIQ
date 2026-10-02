@@ -635,3 +635,16 @@ def calculate_spread_series(
             "maturity_adjusted_spread": float(r["maturity_adjusted_spread"]),
             "net_executable_spread": float(r["net_executable_spread"]),
             "volume_a": int(r["volume_a"]),
+            "volume_b": int(r["volume_b"]),
+            "oi_a": int(r["oi_a"]),
+            "oi_b": int(r["oi_b"]),
+        })
+
+    return {
+        "series": chart_series,
+        "statistics": stats,
+        "signal": signal_payload,
+        "data_quality_warnings": data_quality_warnings,
+        "disclaimer": compliance_disclaimer,
+        "message": "Success"
+    }
