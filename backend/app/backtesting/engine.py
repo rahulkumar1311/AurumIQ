@@ -451,3 +451,98 @@ def simulate_contract_pairs(
                     "entry_price_a": round(entry_price_a, 2),
                     "entry_price_b": round(entry_price_b, 2),
                     "exit_price_a": round(curr_p_a, 2),
+                    "exit_price_b": round(curr_p_b, 2),
+                    "entry_spread": round(entry_price_a - entry_price_b, 2),
+                    "exit_spread": round(curr_p_a - curr_p_b, 2),
+                    "entry_z": round(entry_z_val, 2),
+                    "exit_z": round(z, 2),
+                    "gross_pnl": round(gross_pnl, 2),
+                    "transaction_costs": round(total_trade_friction, 2),
+                    "turnover": round(total_trade_turnover, 2),
+                    "net_pnl": round(net_pnl, 2),
+                    "return_pct": round(ret_pct, 3),
+                    "exit_reason": exit_reason,
+                    "was_rolled": is_roll
+                })
+                
+                if is_roll:
+                    # Roll into next active contract seamlessly, incurring new entry friction
+                    next_pick_a = next_cands_a.sort_values("dte").iloc[0]
+                    next_pick_b = next_cands_b.sort_values("dte").iloc[0]
+                    
+                    active_expiry_a = str(next_pick_a["expiry_date"])
+                    active_expiry_b = str(next_pick_b["expiry_date"])
+                    entry_price_a = float(next_pick_a[price_col])
+                    entry_price_b = float(next_pick_b[price_col])
+                    entry_date = d
+                    entry_z_val = z
+                    entry_idx = i
+                    
+                    # New leg entry friction
+                    roll_fric_a = calculate_leg_friction(pair_a, entry_price_a, units_10g, is_buy=(position == 1), volume=int(next_pick_a.get("volume", 100)), slippage_map=slippage_map, include_friction=include_friction)
+                    roll_fric_b = calculate_leg_friction(pair_b, entry_price_b, units_10g, is_buy=(position == -1), volume=int(next_pick_b.get("volume", 100)), slippage_map=slippage_map, include_friction=include_friction)
+                    trade_friction_acc = roll_fric_a["total_friction"] + roll_fric_b["total_friction"]
+                    trade_turnover_acc = (entry_price_a + entry_price_b) * units_10g
+                else:
+                    # Reset to flat
+                    position = 0
+                    active_expiry_a = None
+                    active_expiry_b = None
+                    entry_date = None
+                    trade_friction_acc = 0.0
+                    trade_turnover_acc = 0.0
+
+        # 2. Check New Position Entry (Only if flat and before horizon cutoff)
+        if position == 0 and i < n_days - 1:
+            is_entry = False
+            new_pos = 0
+            
+            if z <= -entry_z:
+                is_entry = True
+                new_pos = 1  # Long Spread (Buy A, Sell B)
+            elif z >= entry_z:
+                is_entry = True
+                new_pos = -1  # Short Spread (Sell A, Buy B)
+                
+            if is_entry:
+                # Find active tradeable contracts with DTE > expiry_buffer_days
+                rows_a = df_a[df_a["trade_date"] == d]
+                rows_b = df_b[df_b["trade_date"] == d]
+                
+                cands_a = rows_a[rows_a["dte"] > expiry_buffer_days]
+                cands_b = rows_b[rows_b["dte"] > expiry_buffer_days]
+                
+                if not cands_a.empty and not cands_b.empty:
+                    pick_a = cands_a.sort_values("dte").iloc[0]
+                    pick_b = cands_b.sort_values("dte").iloc[0]
+                    
+                    active_expiry_a = str(pick_a["expiry_date"])
+                    active_expiry_b = str(pick_b["expiry_date"])
+                    entry_price_a = float(pick_a[price_col])
+                    entry_price_b = float(pick_b[price_col])
+                    entry_date = d
+                    entry_z_val = z
+                    entry_idx = i
+                    position = new_pos
+                    
+                    # Compute entry transaction costs
+                    vol_a = int(pick_a.get("volume", 100))
+                    vol_b = int(pick_b.get("volume", 100))
+                    fric_a = calculate_leg_friction(pair_a, entry_price_a, units_10g, is_buy=(position == 1), volume=vol_a, slippage_map=slippage_map, include_friction=include_friction)
+                    fric_b = calculate_leg_friction(pair_b, entry_price_b, units_10g, is_buy=(position == -1), volume=vol_b, slippage_map=slippage_map, include_friction=include_friction)
+                    
+                    trade_friction_acc = fric_a["total_friction"] + fric_b["total_friction"]
+                    trade_turnover_acc = (entry_price_a + entry_price_b) * units_10g
+
+        # 3. Track Daily Portfolio Equity
+        if current_capital > peak_capital:
+            peak_capital = current_capital
+            
+        dd_inr = peak_capital - current_capital
+        dd_pct = (dd_inr / peak_capital * 100.0) if peak_capital > 0 else 0.0
+        
+        equity_curve.append({
+            "trade_date": d,
+            "capital": round(current_capital, 2),
+            "drawdown_pct": round(dd_pct, 2),
+            "drawdown_inr": round(dd_inr, 2),
