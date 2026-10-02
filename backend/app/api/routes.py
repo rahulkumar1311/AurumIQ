@@ -358,3 +358,59 @@ def execute_backtest(req: BacktestRequest) -> Dict[str, Any]:
         
         cursor.execute("SELECT * FROM market_data WHERE symbol = ? ORDER BY trade_date ASC, dte ASC;", (req.pair_b,))
         df_b = pd.DataFrame([dict(r) for r in cursor.fetchall()])
+
+        cursor.execute("""
+            SELECT trade_date, normalized_close_10g, close
+            FROM market_data
+            WHERE symbol = 'GOLDM'
+            GROUP BY trade_date
+            ORDER BY trade_date ASC;
+        """)
+        df_bench = pd.DataFrame([dict(r) for r in cursor.fetchall()])
+        
+    res = run_spread_backtest(
+        df_a=df_a,
+        df_b=df_b,
+        pair_a=req.pair_a,
+        pair_b=req.pair_b,
+        entry_z=req.entry_z,
+        exit_z=req.exit_z,
+        stop_loss_z=req.stop_loss_z,
+        lookback=req.lookback,
+        initial_capital=req.initial_capital,
+        use_purity_adjusted=req.use_purity_adjusted,
+        include_friction=req.include_friction,
+        dev_ratio=req.dev_ratio,
+        val_ratio=req.val_ratio,
+        test_ratio=req.test_ratio,
+        expiry_buffer_days=req.expiry_buffer_days,
+        auto_calibrate=req.auto_calibrate,
+        benchmark_df=df_bench
+    )
+    
+    return {
+        "has_data": True,
+        **res
+    }
+
+@router.post("/backtest/report")
+def download_backtest_report(req: BacktestRequest) -> Response:
+    """Generates downloadable institutional walk-forward backtest audit report in CSV format."""
+    from app.backtesting.engine import generate_backtest_report_csv
+    res = execute_backtest(req)
+    csv_text = generate_backtest_report_csv(res)
+    headers = {
+        "Content-Disposition": f"attachment; filename=aurumiq_walk_forward_backtest_{req.pair_a}_{req.pair_b}.csv",
+        "Content-Type": "text/csv; charset=utf-8"
+    }
+    return Response(content=csv_text, media_type="text/csv", headers=headers)
+
+# ----------------- Data Quality & Contract Calendar -----------------
+@router.get("/data-quality")
+def get_data_quality() -> Dict[str, Any]:
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as cnt FROM market_data;")
+        cnt = cursor.fetchone()["cnt"]
+        
+        if cnt == 0:
