@@ -453,3 +453,41 @@ def get_data_quality() -> Dict[str, Any]:
         
     bhavcopy_imports = get_recent_bhavcopy_imports(limit=15)
         
+    return {
+        "has_data": True,
+        "total_records": cnt,
+        "date_range": date_range,
+        "calendar": calendar,
+        "anomalies": anomalies,
+        "ingestion_logs": logs,
+        "bhavcopy_imports": bhavcopy_imports
+    }
+
+class BhavcopyDownloadRequest(BaseModel):
+    requested_date: str  # DD/MM/YYYY
+
+@router.post("/bhavcopy/download")
+def download_mcx_bhavcopy(req: BhavcopyDownloadRequest) -> Dict[str, Any]:
+    """
+    Attempts to download and ingest MCX Bhavcopy for requested_date (DD/MM/YYYY).
+    Persists raw records, audit logs, and validation diagnostics.
+    """
+    download_res = attempt_mcx_direct_download(req.requested_date)
+    import_id = save_bhavcopy_import_audit(download_res, source="MCX_DIRECT_DOWNLOAD")
+    download_res["import_id"] = import_id
+    return download_res
+
+MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024  # 25 MB
+
+def _validate_uploaded_file(file: UploadFile, content: bytes) -> None:
+    if file.filename:
+        filename_lower = file.filename.lower()
+        if not (filename_lower.endswith(".csv") or filename_lower.endswith(".txt")):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid file format. Only MCX Bhavcopy CSV (.csv) or text (.txt) files are accepted."
+            )
+    if len(content) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="File size exceeds maximum permitted limit of 25MB."
