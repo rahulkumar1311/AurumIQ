@@ -640,3 +640,79 @@ def fit_parameters_on_development(
     }
 
 
+def run_spread_backtest(
+    df_a: pd.DataFrame,
+    df_b: pd.DataFrame,
+    pair_a: str,
+    pair_b: str,
+    entry_z: float = 1.5,
+    exit_z: float = 0.2,
+    stop_loss_z: float = 3.0,
+    lookback: int = 20,
+    initial_capital: float = 500000.0,
+    use_purity_adjusted: bool = False,
+    include_friction: bool = True,
+    dev_ratio: float = 0.50,
+    val_ratio: float = 0.25,
+    test_ratio: float = 0.25,
+    expiry_buffer_days: int = 3,
+    auto_calibrate: bool = False,
+    benchmark_df: Optional[pd.DataFrame] = None
+) -> Dict[str, Any]:
+    """
+    Main entry point for AurumIQ Walk-Forward Backtesting Engine.
+    Executes rigorous 3-phase chronological walk-forward simulation across individual contracts:
+    1. Development Window: Fits / calibrates parameters and freezes them.
+    2. Validation Window: Evaluates frozen parameters on first out-of-sample window.
+    3. Final Unseen Test Window: Evaluates frozen parameters on strictly untouched future data.
+    4. Full Horizon: Continuous lifecycle execution with contract rolls and benchmark comparison.
+    """
+    if df_a.empty or df_b.empty:
+        return {
+            "success": False,
+            "message": "Insufficient data for reliable validation: Market data series is empty.",
+            "metrics": None,
+            "walk_forward_splits": None,
+            "trades": [],
+            "equity_curve": []
+        }
+
+    # Extract common chronological trading dates
+    dates_a = set(df_a["trade_date"].astype(str))
+    dates_b = set(df_b["trade_date"].astype(str))
+    common_dates = sorted(list(dates_a.intersection(dates_b)))
+    
+    # Check data sufficiency for 3-phase walk-forward validation
+    MIN_TOTAL_DATES = 30
+    MIN_SPLIT_DATES = 8
+    
+    if len(common_dates) < MIN_TOTAL_DATES:
+        return {
+            "success": False,
+            "insufficient_data": True,
+            "available_sessions": len(common_dates),
+            "required_sessions": MIN_TOTAL_DATES,
+            "message": (
+                f"Insufficient data for reliable validation: Available historical observations ({len(common_dates)}) "
+                f"below minimum threshold ({MIN_TOTAL_DATES}) required for 3-phase walk-forward splitting."
+            ),
+            "metrics": None,
+            "walk_forward_splits": None,
+            "trades": [],
+            "equity_curve": []
+        }
+
+    # Chronological partition (Zero Shuffling)
+    n_total = len(common_dates)
+    n_dev = int(n_total * dev_ratio)
+    n_val = int(n_total * val_ratio)
+    
+    dates_dev = common_dates[:n_dev]
+    dates_val = common_dates[n_dev : n_dev + n_val]
+    dates_test = common_dates[n_dev + n_val :]
+    
+    if len(dates_dev) < MIN_SPLIT_DATES or len(dates_val) < MIN_SPLIT_DATES or len(dates_test) < MIN_SPLIT_DATES:
+        return {
+            "success": False,
+            "message": (
+                "Insufficient data for reliable validation: Split partition produces windows with fewer than "
