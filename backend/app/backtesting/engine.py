@@ -886,3 +886,41 @@ def generate_backtest_report_csv(backtest_res: Dict[str, Any]) -> str:
     lines.append(f"Exit Z-Score Target,±{fp.get('exit_z')}σ,Frozen on Development")
     lines.append(f"Stop-Loss Threshold,±{fp.get('stop_loss_z')}σ,Frozen on Development")
     lines.append(f"Rolling Lookback Window,{fp.get('lookback')} Days,Frozen on Development")
+    lines.append("")
+    
+    # 2. Walk-Forward Chronological Splits
+    splits = backtest_res.get("walk_forward_splits", {})
+    lines.append("## 2. CHRONOLOGICAL WALK-FORWARD PARTITIONS (ZERO SHUFFLING)")
+    lines.append("Partition,Start Date,End Date,Trading Days,Trade Count,Net PnL (INR),Return %,Sharpe,Alpha %")
+    for key, sp in splits.items():
+        m = sp.get("metrics", {})
+        lines.append(
+            f"{sp.get('period_name')},{sp.get('start_date')},{sp.get('end_date')},"
+            f"{sp.get('trading_days')},{sp.get('trade_count')},{m.get('total_net_pnl', 0.0)},"
+            f"{m.get('total_return_pct', 0.0)}%,{m.get('sharpe_ratio', 0.0)},{m.get('alpha_pct', 0.0)}%"
+        )
+    lines.append("")
+    
+    # 3. Microstructure Assumptions
+    lines.append("## 3. REGULATORY FRICTION & SLIPPAGE ASSUMPTIONS")
+    lines.append("Component,Rate / Unit,Application Rule")
+    lines.append("MCX Exchange Turnover Fee,0.0021%,Applied to both buy and sell legs")
+    lines.append("Commodity Transaction Tax (CTT),0.0100%,Applied strictly to sell legs only")
+    lines.append("Stamp Duty,0.0020%,Applied strictly to buy legs only")
+    lines.append("Brokerage,0.0050%,Applied to both buy and sell legs")
+    lines.append("GST,18.00%,Applied to Brokerage + Exchange Turnover Fee")
+    lines.append("GOLDM Bid-Ask Slippage,₹4.0 / 10g,Conservative market estimate")
+    lines.append("GOLDTEN Bid-Ask Slippage,₹5.0 / 10g,Conservative market estimate")
+    lines.append("GOLDGUINEA Bid-Ask Slippage,₹8.0 / 10g,Conservative retail coin estimate")
+    lines.append("GOLDPETAL Bid-Ask Slippage,₹15.0 / 10g,Retail tamper-proof packaging friction")
+    lines.append(f"Settlement Price Limitation,{SETTLEMENT_PRICE_LIMITATION_DISCLOSURE}")
+    lines.append("")
+    
+    # 4. Benchmark Comparison
+    bench = backtest_res.get("benchmark_comparison", {})
+    lines.append("## 4. BENCHMARK COMPARISON (ALPHA VS PASSIVE GOLD BETA)")
+    lines.append("Metric,Value")
+    lines.append(f"Benchmark,{bench.get('benchmark_name')}")
+    lines.append(f"Strategy Net Return,{bench.get('strategy_return_pct')}%")
+    lines.append(f"Benchmark Return,{bench.get('benchmark_return_pct')}%")
+    lines.append(f"Alpha (Excess Return),{bench.get('alpha_pct')}%")
