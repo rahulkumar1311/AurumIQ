@@ -576,3 +576,36 @@ def calculate_spread_series(
                 "symbol": symbol_b,
                 "expiry": str(latest["expiry_b"]),
                 "raw_close": float(latest["raw_close_b"]),
+                "normalized_price_10g": float(latest["price_b"]),
+                "volume": int(latest["volume_b"]),
+                "open_interest": int(latest["oi_b"]),
+                "dte": int(latest["dte_b"])
+            }
+        },
+        "spread_metrics": {
+            "gross_spread": round(current_spread, 2),
+            "pct_spread": round(float(latest["pct_spread"]), 3),
+            "calendar_carry_drag": latest_carry_drag,
+            "maturity_adjusted_spread": latest_mat_adj_spread,
+            "estimated_friction": computed_friction,
+            "net_executable_spread": latest_net_executable,
+            "is_executable_opportunity": latest_net_executable > 0
+        },
+        "statistical_metrics": {
+            "z_score": current_z,
+            "valid_z": valid_z,
+            "z_threshold": z_threshold,
+            "exit_threshold": exit_threshold,
+            "rolling_mean": float(latest["rolling_mean"]) if not np.isnan(latest["rolling_mean"]) else None,
+            "rolling_std": float(latest["rolling_std"]) if not np.isnan(latest["rolling_std"]) else None,
+            "zero_variance": bool(latest["zero_variance"])
+        },
+        "reasons": reasons,
+        "data_quality_warnings": data_quality_warnings,
+        "disclaimer": compliance_disclaimer
+    }
+
+    # Format chart timeseries payload
+    chart_series = []
+    for _, r in merged.iterrows():
+        chart_series.append({
