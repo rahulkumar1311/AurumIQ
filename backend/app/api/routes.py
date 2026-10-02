@@ -81,3 +81,58 @@ def get_overview() -> Dict[str, Any]:
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) as cnt FROM market_data;")
         cnt = cursor.fetchone()["cnt"]
+        assumptions = default_engine.get_assumptions_report()
+        
+        if cnt == 0:
+            # Return empty state structure with specs
+            specs_list = [spec.model_dump() for spec in CONTRACT_SPECS.values()]
+            return {
+                "has_data": False,
+                "message": "No market data available in local database. Ingest MCX Bhavcopy or load sample dataset to view analytics.",
+                "contracts": specs_list,
+                "quotes": [],
+                "spread_matrix": [],
+                "normalization_assumptions": assumptions
+            }
+            
+        # Get latest available trade date
+        cursor.execute("SELECT MAX(trade_date) as latest_date FROM market_data;")
+        latest_date = cursor.fetchone()["latest_date"]
+        
+        # Get near-month contracts for latest date (minimum DTE for each contract)
+        cursor.execute("""
+            SELECT m.*
+            FROM market_data m
+            INNER JOIN (
+                SELECT symbol, MIN(dte) as min_dte
+                FROM market_data
+                WHERE trade_date = ?
+                GROUP BY symbol
+            ) sub ON m.symbol = sub.symbol AND m.dte = sub.min_dte
+            WHERE m.trade_date = ?
+            ORDER BY m.symbol;
+        """, (latest_date, latest_date))
+        
+        rows = [dict(r) for r in cursor.fetchall()]
+        
+        # Build pairwise spread matrix on normalized 10g close
+        symbols = [r["symbol"] for r in rows]
+        price_map = {r["symbol"]: r["normalized_close_10g"] for r in rows}
+        matrix = []
+        for s1 in symbols:
+            row_dict = {"symbol": s1}
+            for s2 in symbols:
+                if s1 in price_map and s2 in price_map:
+                    row_dict[s2] = round(price_map[s1] - price_map[s2], 2)
+                else:
+                    row_dict[s2] = None
+            matrix.append(row_dict)
+            
+        specs_list = [CONTRACT_SPECS[r["symbol"]].model_dump() for r in rows]
+        
+        return {
+            "has_data": True,
+            "latest_trade_date": latest_date,
+            "contracts": specs_list,
+            "quotes": rows,
+            "spread_matrix": matrix,
