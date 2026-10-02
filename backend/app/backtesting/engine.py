@@ -262,3 +262,98 @@ def simulate_contract_pairs(
     df_a = df_a_all.copy()
     df_b = df_b_all.copy()
     df_a["trade_date"] = df_a["trade_date"].astype(str)
+    df_b["trade_date"] = df_b["trade_date"].astype(str)
+    
+    if "expiry_date" not in df_a.columns:
+        df_a["expiry_date"] = "2026-10-05"
+    if "expiry_date" not in df_b.columns:
+        df_b["expiry_date"] = "2026-10-05"
+    if "dte" not in df_a.columns:
+        df_a["dte"] = 30
+    if "dte" not in df_b.columns:
+        df_b["dte"] = 30
+    if "volume" not in df_a.columns:
+        df_a["volume"] = 100
+    if "volume" not in df_b.columns:
+        df_b["volume"] = 100
+    if price_col not in df_a.columns:
+        df_a[price_col] = df_a["close"] if "close" in df_a.columns else 75000.0
+    if price_col not in df_b.columns:
+        df_b[price_col] = df_b["close"] if "close" in df_b.columns else 75000.0
+    
+    # State tracking
+    position = 0  # 0: flat, +1: Long Spread (Buy A, Sell B), -1: Short Spread (Sell A, Buy B)
+    active_expiry_a: Optional[str] = None
+    active_expiry_b: Optional[str] = None
+    entry_price_a = 0.0
+    entry_price_b = 0.0
+    entry_date: Optional[str] = None
+    entry_z_val = 0.0
+    entry_idx = 0
+    trade_friction_acc = 0.0
+    trade_turnover_acc = 0.0
+    
+    trades: List[Dict[str, Any]] = []
+    equity_curve: List[Dict[str, Any]] = []
+    
+    current_capital = float(initial_capital)
+    peak_capital = float(initial_capital)
+    
+    # Build daily representative spread series for point-in-time signal calculation
+    # Using near-month tradeable contracts (DTE > expiry_buffer_days) on each historical date
+    daily_records = []
+    for d in dates:
+        rows_a = df_a[df_a["trade_date"] == d]
+        rows_b = df_b[df_b["trade_date"] == d]
+        if rows_a.empty or rows_b.empty:
+            continue
+            
+        # Select near-month active contract (DTE > buffer)
+        cand_a = rows_a[rows_a["dte"] > expiry_buffer_days]
+        cand_b = rows_b[rows_b["dte"] > expiry_buffer_days]
+        
+        pick_a = cand_a.sort_values("dte").iloc[0] if not cand_a.empty else rows_a.sort_values("dte").iloc[0]
+        pick_b = cand_b.sort_values("dte").iloc[0] if not cand_b.empty else rows_b.sort_values("dte").iloc[0]
+        
+        p_a = float(pick_a[price_col] if price_col in pick_a else pick_a.get("close", 75000.0))
+        p_b = float(pick_b[price_col] if price_col in pick_b else pick_b.get("close", 75000.0))
+        
+        daily_records.append({
+            "trade_date": d,
+            "price_a": p_a,
+            "price_b": p_b,
+            "spread": round(p_a - p_b, 2),
+            "expiry_a": str(pick_a.get("expiry_date", "")),
+            "expiry_b": str(pick_b.get("expiry_date", "")),
+            "dte_a": int(pick_a.get("dte", 30)),
+            "dte_b": int(pick_b.get("dte", 30)),
+            "volume_a": int(pick_a.get("volume", 100)),
+            "volume_b": int(pick_b.get("volume", 100)),
+        })
+        
+    df_daily = pd.DataFrame(daily_records)
+    if len(df_daily) < 5:
+        return {
+            "success": False,
+            "message": "Insufficient daily observations in simulation window.",
+            "metrics": None,
+            "trades": [],
+            "equity_curve": []
+        }
+
+    # Strict point-in-time rolling statistics (Zero Look-Ahead Bias)
+    spreads = df_daily["spread"].values
+    n_days = len(df_daily)
+    z_scores = np.zeros(n_days)
+    for i in range(n_days):
+        start_i = max(0, i - lookback + 1)
+        w = spreads[start_i : i + 1]
+        if len(w) >= min(lookback, 5):
+            m = np.mean(w)
+            s = np.std(w, ddof=1) if len(w) > 1 else 0.0
+            if s > 1e-8:
+                z_scores[i] = (spreads[i] - m) / s
+            else:
+                z_scores[i] = 0.0
+        else:
+            z_scores[i] = 0.0
