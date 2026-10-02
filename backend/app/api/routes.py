@@ -541,3 +541,15 @@ def reset_database() -> Dict[str, Any]:
     return {"status": "success", "message": "Database reset to initial empty state."}
 
 @router.post("/data-quality/upload-csv")
+async def upload_bhavcopy_csv_legacy(
+    file: UploadFile = File(...),
+    requested_date: Optional[str] = Form(None)
+) -> Dict[str, Any]:
+    content = await file.read()
+    _validate_uploaded_file(file, content)
+    csv_text = content.decode("utf-8", errors="ignore")
+    parsed = parse_mcx_bhavcopy_file(csv_text, requested_date_str=requested_date, source=file.filename)
+    import_id = save_bhavcopy_import_audit(parsed, source=f"CSV_UPLOAD ({file.filename})")
+    parsed["import_id"] = import_id
+    return parsed
+
