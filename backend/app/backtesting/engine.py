@@ -139,3 +139,126 @@ def calculate_leg_friction(
 
 def compute_performance_metrics(
     trades: List[Dict[str, Any]],
+    equity_curve: List[Dict[str, Any]],
+    initial_capital: float,
+    benchmark_returns: Optional[pd.Series] = None
+) -> Dict[str, Any]:
+    """
+    Computes standard quantitative metrics including Net PnL, Drawdown, Sharpe, Win Rate,
+    and Benchmark Alpha/Beta comparison.
+    """
+    total_trades = len(trades)
+    winning_trades = [t for t in trades if t["net_pnl"] > 0]
+    losing_trades = [t for t in trades if t["net_pnl"] < 0]
+    
+    win_rate = (len(winning_trades) / total_trades * 100.0) if total_trades > 0 else 0.0
+    total_gross_profit = sum(t["gross_pnl"] for t in winning_trades)
+    total_gross_loss = abs(sum(t["gross_pnl"] for t in losing_trades))
+    profit_factor = (total_gross_profit / total_gross_loss) if total_gross_loss > 0 else (99.0 if total_gross_profit > 0 else 0.0)
+    
+    final_capital = equity_curve[-1]["capital"] if equity_curve else initial_capital
+    total_net_pnl = final_capital - initial_capital
+    total_return_pct = (total_net_pnl / initial_capital) * 100.0 if initial_capital > 0 else 0.0
+    total_costs_paid = sum(t.get("transaction_costs", 0.0) for t in trades)
+    total_turnover = sum(t.get("turnover", 0.0) for t in trades)
+    
+    max_dd = max([p.get("drawdown_pct", 0.0) for p in equity_curve]) if equity_curve else 0.0
+    max_dd_inr = max([p.get("drawdown_inr", 0.0) for p in equity_curve]) if equity_curve else 0.0
+    
+    # Strategy daily returns
+    if len(equity_curve) > 2:
+        caps = pd.Series([p["capital"] for p in equity_curve])
+        strat_rets = caps.pct_change().dropna()
+        if len(strat_rets) > 1 and strat_rets.std() > 1e-7:
+            sharpe = float(np.sqrt(252.0) * (strat_rets.mean() / strat_rets.std()))
+        else:
+            sharpe = 0.0
+    else:
+        sharpe = 0.0
+        strat_rets = pd.Series([], dtype=float)
+        
+    avg_holding = float(np.mean([t["holding_days"] for t in trades])) if trades else 0.0
+    
+    # Benchmark comparison (Alpha & Beta against Buy & Hold Gold Benchmark)
+    alpha_pct = 0.0
+    beta = 0.0
+    correlation = 0.0
+    info_ratio = 0.0
+    bench_return_pct = 0.0
+    
+    if benchmark_returns is not None and len(benchmark_returns) > 1 and len(strat_rets) > 1:
+        # Align series lengths
+        min_len = min(len(strat_rets), len(benchmark_returns))
+        s_aligned = strat_rets.iloc[-min_len:]
+        b_aligned = benchmark_returns.iloc[-min_len:]
+        
+        bench_cum = float((np.prod(1.0 + b_aligned) - 1.0) * 100.0)
+        bench_return_pct = round(bench_cum, 2)
+        alpha_pct = round(total_return_pct - bench_return_pct, 2)
+        
+        var_b = float(b_aligned.var())
+        cov_sb = float(np.cov(s_aligned, b_aligned)[0][1]) if len(s_aligned) > 1 else 0.0
+        beta = round(cov_sb / var_b, 3) if var_b > 1e-8 else 0.0
+        
+        corr_val = float(s_aligned.corr(b_aligned))
+        correlation = round(corr_val, 3) if not np.isnan(corr_val) else 0.0
+        
+        diff = s_aligned - b_aligned
+        if len(diff) > 1 and diff.std() > 1e-7:
+            info_ratio = round(float(np.sqrt(252.0) * (diff.mean() / diff.std())), 2)
+
+    return {
+        "initial_capital": round(initial_capital, 2),
+        "final_capital": round(final_capital, 2),
+        "total_net_pnl": round(total_net_pnl, 2),
+        "total_gross_pnl": round(sum(t.get("gross_pnl", 0.0) for t in trades), 2),
+        "total_return_pct": round(total_return_pct, 2),
+        "benchmark_return_pct": bench_return_pct,
+        "alpha_pct": alpha_pct,
+        "beta_to_gold": beta,
+        "correlation_to_gold": correlation,
+        "information_ratio": info_ratio,
+        "total_trades": total_trades,
+        "winning_trades": len(winning_trades),
+        "losing_trades": len(losing_trades),
+        "win_rate_pct": round(win_rate, 2),
+        "profit_factor": round(profit_factor, 2),
+        "max_drawdown_pct": round(max_dd, 2),
+        "max_drawdown_inr": round(max_dd_inr, 2),
+        "sharpe_ratio": round(sharpe, 2),
+        "total_statutory_costs": round(total_costs_paid, 2),
+        "total_turnover": round(total_turnover, 2),
+        "average_holding_days": round(avg_holding, 1)
+    }
+
+
+def simulate_contract_pairs(
+    df_a_all: pd.DataFrame,
+    df_b_all: pd.DataFrame,
+    pair_a: str,
+    pair_b: str,
+    dates: List[str],
+    entry_z: float,
+    exit_z: float,
+    stop_loss_z: float,
+    lookback: int,
+    initial_capital: float,
+    expiry_buffer_days: int = 3,
+    units_10g: float = 10.0,
+    use_purity_adjusted: bool = False,
+    include_friction: bool = True,
+    slippage_map: Optional[Dict[str, float]] = None,
+    benchmark_df: Optional[pd.DataFrame] = None
+) -> Dict[str, Any]:
+    """
+    Simulates a pairs trading strategy on authentic individual contracts over a specific list of dates.
+    Strictly avoids artificial continuous series roll jumps by modeling physical positions in actual expiries,
+    monitoring contract DTE, and executing contract rolls or tender-period mandatory exits.
+    """
+    price_col = "purity_adjusted_10g" if use_purity_adjusted else "normalized_close_10g"
+    
+    # Index dataframes by (symbol, trade_date, expiry_date) and (symbol, trade_date)
+    # Ensure trade_date is string
+    df_a = df_a_all.copy()
+    df_b = df_b_all.copy()
+    df_a["trade_date"] = df_a["trade_date"].astype(str)
