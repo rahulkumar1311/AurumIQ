@@ -136,3 +136,59 @@ def get_overview() -> Dict[str, Any]:
             "contracts": specs_list,
             "quotes": rows,
             "spread_matrix": matrix,
+            "normalization_assumptions": assumptions
+        }
+
+# ----------------- Cross-Contract Comparison -----------------
+@router.get("/cross-contract")
+def get_cross_contract(expiry_filter: Optional[str] = None) -> Dict[str, Any]:
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as cnt FROM market_data;")
+        if cursor.fetchone()["cnt"] == 0:
+            return {
+                "has_data": False,
+                "message": "No market data available.",
+                "history": [],
+                "basis_curve": [],
+                "liquidity": []
+            }
+            
+        # Get near-month series for each contract across dates
+        cursor.execute("""
+            SELECT m.trade_date, m.symbol, m.close, m.normalized_close_10g,
+                   m.purity_adjusted_10g, m.volume, m.open_interest, m.dte, m.implied_basis_pct
+            FROM market_data m
+            INNER JOIN (
+                SELECT trade_date, symbol, MIN(dte) as min_dte
+                FROM market_data
+                GROUP BY trade_date, symbol
+            ) sub ON m.trade_date = sub.trade_date AND m.symbol = sub.symbol AND m.dte = sub.min_dte
+            ORDER BY m.trade_date ASC;
+        """)
+        records = [dict(r) for r in cursor.fetchall()]
+        
+    df = pd.DataFrame(records)
+    if df.empty:
+        return {"has_data": False, "history": [], "basis_curve": [], "liquidity": []}
+        
+    # Pivot normalized prices by date
+    pivot_norm = df.pivot(index="trade_date", columns="symbol", values="normalized_close_10g").reset_index()
+    history = pivot_norm.to_dict(orient="records")
+
+    # Pivot purity-adjusted prices by date
+    pivot_purity = df.pivot(index="trade_date", columns="symbol", values="purity_adjusted_10g").reset_index()
+    history_purity = pivot_purity.to_dict(orient="records")
+    
+    # Latest basis & carry curve across contracts and expiries
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT MAX(trade_date) as max_date FROM market_data;")
+        max_date = cursor.fetchone()["max_date"]
+        
+        cursor.execute("""
+            SELECT symbol, expiry_date, dte, normalized_close_10g, implied_basis_pct, volume, open_interest
+            FROM market_data
+            WHERE trade_date = ?
+            ORDER BY symbol, dte ASC;
+        """, (max_date,))
