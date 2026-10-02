@@ -924,3 +924,22 @@ def generate_backtest_report_csv(backtest_res: Dict[str, Any]) -> str:
     lines.append(f"Strategy Net Return,{bench.get('strategy_return_pct')}%")
     lines.append(f"Benchmark Return,{bench.get('benchmark_return_pct')}%")
     lines.append(f"Alpha (Excess Return),{bench.get('alpha_pct')}%")
+    lines.append(f"Beta to Gold,{bench.get('beta')}")
+    lines.append(f"Correlation to Gold,{bench.get('correlation')}")
+    lines.append(f"Information Ratio,{bench.get('information_ratio')}")
+    lines.append("")
+    
+    # 5. Chronological Trade Log
+    trades = backtest_res.get("trades", [])
+    lines.append("## 5. CHRONOLOGICAL TRADE EXECUTION LOG")
+    lines.append("Trade ID,Direction,Contract A,Expiry A,Contract B,Expiry B,Entry Date,Exit Date,Holding Days,Entry Spread,Exit Spread,Entry Z,Exit Z,Gross PnL,Transaction Costs,Net PnL,Return %,Exit Reason,Was Rolled")
+    for t in trades:
+        lines.append(
+            f"{t.get('trade_id')},{t.get('direction')},{t.get('contract_a')},{t.get('expiry_a')},"
+            f"{t.get('contract_b')},{t.get('expiry_b')},{t.get('entry_date')},{t.get('exit_date')},"
+            f"{t.get('holding_days')},{t.get('entry_spread')},{t.get('exit_spread')},{t.get('entry_z')},"
+            f"{t.get('exit_z')},{t.get('gross_pnl')},{t.get('transaction_costs')},{t.get('net_pnl')},"
+            f"{t.get('return_pct')},{t.get('exit_reason')},{t.get('was_rolled')}"
+        )
+        
+    return "\n".join(lines)
