@@ -519,3 +519,25 @@ def get_bhavcopy_import_history() -> Dict[str, Any]:
     """Returns recent bhavcopy ingestion audit history."""
     imports = get_recent_bhavcopy_imports(limit=25)
     return {
+        "count": len(imports),
+        "imports": imports
+    }
+
+@router.post("/data-quality/ingest-sample")
+def ingest_sample() -> Dict[str, Any]:
+    res = load_sample_data_into_db()
+    return res
+
+@router.post("/data-quality/reset")
+def reset_database() -> Dict[str, Any]:
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM market_data;")
+        cursor.execute("DELETE FROM backtest_runs;")
+        cursor.execute("DELETE FROM ingestion_logs;")
+        cursor.execute("DELETE FROM raw_bhavcopy_records;")
+        cursor.execute("DELETE FROM validation_logs;")
+        cursor.execute("DELETE FROM raw_bhavcopy_imports;")
+    return {"status": "success", "message": "Database reset to initial empty state."}
+
+@router.post("/data-quality/upload-csv")
