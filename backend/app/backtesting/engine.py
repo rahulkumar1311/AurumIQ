@@ -839,3 +839,50 @@ def run_spread_backtest(
         "pair_b": pair_b,
         "strategy_name": f"Walk-Forward Spread Arbitrage ({pair_a}/{pair_b})",
         "lookback": active_lookback,
+        "entry_z": active_entry_z,
+        "exit_z": active_exit_z,
+        "stop_loss_z": active_stop_loss_z,
+        "friction_included": include_friction
+    })
+
+    return {
+        "success": True,
+        "run_id": str(uuid.uuid4())[:8],
+        "strategy_name": f"Walk-Forward Spread Arbitrage ({pair_a}/{pair_b})",
+        "frozen_parameters": frozen_params,
+        "walk_forward_splits": splits_payload,
+        "metrics": full_metrics,
+        "benchmark_comparison": {
+            "benchmark_name": "MCX Gold Benchmark (Underlying 995 Fine Continuous)",
+            "strategy_return_pct": full_metrics["total_return_pct"],
+            "benchmark_return_pct": full_metrics["benchmark_return_pct"],
+            "alpha_pct": full_metrics["alpha_pct"],
+            "beta": full_metrics["beta_to_gold"],
+            "correlation": full_metrics["correlation_to_gold"],
+            "information_ratio": full_metrics["information_ratio"]
+        },
+        "trades": sim_full["trades"],
+        "equity_curve": sim_full["equity_curve"],
+        "assumptions": assumptions_payload
+    }
+
+
+def generate_backtest_report_csv(backtest_res: Dict[str, Any]) -> str:
+    """
+    Generates a structured, downloadable CSV audit report explaining all assumptions,
+    walk-forward splits, benchmark alpha, and chronological trade executions.
+    """
+    lines: List[str] = []
+    lines.append("# AURUMIQ QUANTITATIVE WALK-FORWARD BACKTEST AUDIT REPORT")
+    lines.append("# Problem Statement #03: Commodity Derivatives Intelligence")
+    lines.append("")
+    
+    # 1. Strategy & Frozen Parameters
+    fp = backtest_res.get("frozen_parameters", {})
+    lines.append("## 1. STRATEGY SPECIFICATION & FROZEN PARAMETERS")
+    lines.append("Parameter,Value,Calibration Window")
+    lines.append(f"Strategy Name,{backtest_res.get('strategy_name', 'Walk-Forward')},Development")
+    lines.append(f"Entry Z-Score Threshold,±{fp.get('entry_z')}σ,Frozen on Development")
+    lines.append(f"Exit Z-Score Target,±{fp.get('exit_z')}σ,Frozen on Development")
+    lines.append(f"Stop-Loss Threshold,±{fp.get('stop_loss_z')}σ,Frozen on Development")
+    lines.append(f"Rolling Lookback Window,{fp.get('lookback')} Days,Frozen on Development")
