@@ -157,3 +157,74 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 Verify backend health in a separate PowerShell tab:
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/health" | ConvertTo-Json
+```
+
+### Step 3: Frontend Setup & Dev Server
+In a new PowerShell terminal:
+```powershell
+cd d:\AurumIQ\frontend
+
+# Install npm dependencies (if not already installed)
+npm install
+
+# Run Oxlint to verify code standards
+npm run lint
+
+# Build production bundle to verify zero syntax/build errors
+npm run build
+
+# Start Vite development server (http://localhost:5173)
+npm run dev
+```
+
+Open your browser to: **[http://localhost:5173](http://localhost:5173)**
+
+---
+
+## ⚙️ Environment Variables & Configuration
+
+AurumIQ is fully configured out of the box with zero required environment setup, but provides production flexibility via environment variables:
+
+| Variable | Default Value | Description |
+| :--- | :--- | :--- |
+| `AURUMIQ_DB_PATH` | `data/aurumiq.db` | Absolute or relative path to SQLite database |
+| `AURUMIQ_DATA_DIR` | `data` | Directory for database and import file staging |
+| `CORS_ORIGINS` | `*` | Comma-separated list of allowed origins (e.g. `http://localhost:5173,https://aurumiq.example.com`) |
+| `PORT` | `8000` | Backend API listen port |
+
+A sample template is provided in both root `.env.example` and `backend/.env.example`.
+
+---
+
+## 🚢 Deployment Requirements & Strategies
+
+AurumIQ requires no paid third-party APIs or external subscription databases. It can be deployed in multiple production environments:
+
+### Option A: Local Windows / Self-Hosted Production
+1. **Backend**: Run with Uvicorn or Gunicorn with Uvicorn workers behind Nginx or Caddy:
+   ```powershell
+   python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+   ```
+2. **Frontend**: Serve the production build (`frontend/dist`) using any static web server (Caddy, Nginx, or `serve`):
+   ```powershell
+   npx serve -s dist -l 5173
+   ```
+3. **Reverse Proxy**: Configure `/api` route forwarding to `http://127.0.0.1:8000/api`.
+
+### Option B: Docker Containerization
+ AurumIQ can be containerized using a multi-stage Dockerfile:
+- **Backend Service**: Python 3.12-slim base image, installs `requirements.txt`, exposes port 8000 with SQLite volume mount at `/app/data`.
+- **Frontend Service**: Node 20 base image, builds `dist`, served via Nginx alpine with proxy pass for `/api/`.
+
+### Option C: Cloud Platform Deployment (e.g., Render / Railway / Fly.io + Vercel)
+- **FastAPI Backend**: Deploy `backend/` to Render/Railway as a Web Service. Set start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Attach a persistent volume to preserve `data/aurumiq.db`.
+- **Vite Frontend**: Deploy `frontend/` to Vercel/Netlify. Configure build command: `npm run build`, output directory: `dist`, and set up URL rewrite rule to forward `/api/*` to the backend URL.
+
+---
+
+## 📥 Supported File Formats & Ingestion Pipeline
+
+AurumIQ supports official daily MCX Bhavcopy reports exported from [https://www.mcxindia.com/market-data/bhavcopy](https://www.mcxindia.com/market-data/bhavcopy).
+
+### 1. Supported File Formats:
+- **File Extensions**: `.csv`, `.txt` (comma-delimited or semicolon-delimited). Maximum upload size: 25 MB.
