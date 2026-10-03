@@ -228,3 +228,63 @@ AurumIQ supports official daily MCX Bhavcopy reports exported from [https://www.
 
 ### 1. Supported File Formats:
 - **File Extensions**: `.csv`, `.txt` (comma-delimited or semicolon-delimited). Maximum upload size: 25 MB.
+- **Column Header Aliasing Supported**:
+  - `symbol`: `Symbol`, `Commodity`, `Commodity_Name`, `Instrument_Name`, `Scrip`
+  - `trade_date`: `Date`, `Trade_Date`, `TradeDate`, `Bhav_Date`, `Report_Date`
+  - `expiry_date`: `ExpiryDate`, `Expiry_Date`, `Expiry`, `Exp_Date`, `Contract_Expiry`
+  - `open`, `high`, `low`, `close`: `Open`, `High`, `Low`, `Close`, `Settlement_Price`, `Close_Price`
+  - `volume`: `Volume`, `Traded_Qty`, `Volume_Lots`, `Total_Volume`, `Volume(Lots)`
+  - `open_interest`: `OpenInterest`, `Open_Interest`, `OI`, `Total_OI`
+
+### 2. Format Sanitization Capabilities:
+- **Trailing & Leading Whitespace Stripping**: e.g., `"GOLDM   "` → `"GOLDM"`.
+- **String Comma Cleansing**: e.g., `"75,280.00"` → `75280.0`.
+- **Compact Expiry Date Parsing**: Handles `05OCT2026`, `05-OCT-2026`, `05/10/2026`, `2026-10-05`.
+- **Date Ambiguity Disambiguation**: Handles files exported in US `MM/DD/YYYY` or Indian `DD/MM/YYYY`.
+- **Duplicate Row Deduplication**: Gracefully detects, logs, and consolidates identical contract observations.
+
+### 3. Date Mismatch Validation Enforcement:
+- If a user requests or validates an import for date $D_{\text{req}}$ (e.g. `16/09/2026`), but the uploaded Bhavcopy file contains trading data for date $D_{\text{actual}}$ (e.g. `15/09/2026`), **the system strictly rejects the entire file**:
+  ```json
+  {
+    "success": false,
+    "status": "DATE_MISMATCH",
+    "requested_date": "2026-09-16",
+    "actual_data_date": "2026-09-15",
+    "message": "Date mismatch: requested 16/09/2026 (2026-09-16), but MCX Bhavcopy file contains data for 2026-09-15. Silently treating older/different trading day data as requested date is strictly prohibited.",
+    "records": []
+  }
+  ```
+- **Audit Persistence**: Every attempt is recorded in SQLite tables `raw_bhavcopy_imports` and `validation_logs` with row counts and error reasons.
+
+---
+
+## 🔬 Defensible Walk-Forward Backtesting Engine
+
+To eliminate data mining, backtest overfitting, and look-ahead bias, AurumIQ implements a rigorous walk-forward backtesting framework:
+
+1. **Chronological 3-Way Partitioning (Zero Shuffling)**:
+   - **Development Period (50%)**: Parameter calibration window.
+   - **Validation Period (25%)**: Holdout verification window.
+   - **Final Unseen Test Period (25%)**: True out-of-sample evaluation window.
+   - Time-series observations are never randomly shuffled.
+2. **Parameter Freezing**:
+   - Model parameters (lookback window $L$, entry threshold $Z_{\text{entry}}$, exit threshold $Z_{\text{exit}}$, stop-loss $Z_{\text{stop}}$) are fitted strictly on the Development window and frozen before evaluating the Unseen Test window.
+3. **Authentic Individual Contract Holdings**:
+   - Strategy models actual individual contracts (e.g., `GOLDM_2026-10-05` and `GOLDPETAL_2026-09-30`), avoiding synthetic continuous front-month roll artifacts.
+4. **Tender Notice Period Roll Buffer**:
+   - Strategy automatically exits or rolls positions 3 trading days before contract expiry to avoid entering physical delivery tender periods under MCX delivery norms.
+5. **Comprehensive Regulatory Friction Model**:
+   - MCX Exchange Turnover Charge: $0.0015\%$
+   - Commodity Transaction Tax (CTT): $0.01\%$ on sell turnover
+   - Stamp Duty: $0.002\%$ on buy turnover
+   - Brokerage: $0.005\%$
+   - GST: $18\%$ on (Brokerage + Exchange Fees)
+   - SEBI Regulatory Fee: ₹10 per crore turnover
+   - Illiquidity Surcharge: Applied when daily volume $< 10$ lots.
+6. **Benchmark Comparison**:
+   - Strategy returns are compared side-by-side against an MCX Gold Buy & Hold benchmark, reporting **Alpha (% p.a.)**, **Beta**, **Correlation**, and **Information Ratio (IR)**.
+7. **Downloadable Audit Reports**:
+   - Walk-forward backtest results exportable to CSV via `/api/backtest/report`.
+   - Normalization assumptions matrix exportable to CSV via `/api/normalization/report`.
+
