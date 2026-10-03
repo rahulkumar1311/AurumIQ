@@ -86,3 +86,74 @@ AurumIQ was audited against official Multi Commodity Exchange of India (MCX) con
 | **GOLDTEN** | 10 grams | ₹ per 10 grams | **1.0x** | **999** (MCX/TRD/714/2024) | 999 | **Last calendar day of expiry month** (or preceding business day) | Last 3 trading days of contract | 10g Bar/Coin |
 | **GOLDGUINEA**| 8 grams | ₹ per 8 grams | **1.25x** ($10/8$) | **995** (MCX Coin Standard) | **999** *(Flagged Assumption)* | **Last calendar day of expiry month** (or preceding business day) | Last 3 trading days of contract | 8g Coin |
 | **GOLDPETAL** | 1 gram | ₹ per 1 gram | **10.0x** | **999** | 999 | **Last calendar day of expiry month** (or preceding business day) | Last 3 trading days of contract | 1g Blister Card |
+
+---
+
+### 🚩 Flagged Assumptions & Audit Discrepancies
+
+1. **GOLDGUINEA Purity Discrepancy (Official MCX 995 vs. Hackathon Assumption 999)**:
+   - **Official Exchange Finding**: The official MCX Gold Guinea product specification ([mcxindia.com/products/bullion/gold](https://www.mcxindia.com/products/bullion/gold)) explicitly defines the deliverable coin standard as **995 fineness** (99.5% pure gold).
+   - **Problem Statement #03 Text**: Assigned GOLDGUINEA 999 purity.
+   - **Resolution Without Guesswork**: AurumIQ makes this convention fully configurable via `NormalizationConfig(purity_convention=...)`:
+     - Under `OFFICIAL_MCX` (default): GOLDGUINEA purity is 995.0, yielding a fine gold purity multiplier of $999 / 995 \approx 1.00402010$ and composite multiplier of $1.25 \times (999/995) \approx 1.255025$.
+     - Under `PROBLEM_STATEMENT_03`: GOLDGUINEA purity is set to 999.0, yielding a purity multiplier of $1.000000$ and composite multiplier of $1.250000$.
+     - The UI, normalization report, and API flag this discrepancy transparently with an `Audit Flag` badge.
+
+2. **Expiry Cycle Asymmetry (5th of Month vs. Month-End)**:
+   - **Official Rule**: `GOLDM` expires on the **5th day of the contract month**, whereas `GOLDTEN`, `GOLDGUINEA`, and `GOLDPETAL` expire on the **last calendar day of the contract month**.
+   - **Cross-Contract Relative Value Impact**: Contracts labeled for the same month (e.g. October 2026) have an inherent maturity gap of ~25-26 calendar days (`2026-10-05` vs `2026-10-31`).
+   - **Enforced Eligibility Rule**:
+     - The engine detects this asymmetry and emits an explicit `Expiry Cycle Asymmetry` warning detailing the calendar gap and the financing carry adjustment.
+     - Unsuitable expiry combinations where $|\text{DTE}_A - \text{DTE}_B| > 45\text{ days}$ are blocked from relative-value execution because calendar basis risk dominates product spread divergence.
+
+3. **Compulsory Physical Delivery & Tender Window Constraints**:
+   - **Official Rule**: All MCX gold futures are compulsory physical delivery contracts with a staggered tender period covering the **last 3 trading days** of the contract.
+   - **Systematic Trading Safeguard**:
+     - When either leg of a pair enters the tender window ($\text{DTE} \le 3\text{ days}$), the spread engine flags `IN_TENDER_PERIOD` and blocks actionable signal generation.
+     - The backtesting engine enforces a mandatory tender buffer exit/roll prior to $\text{DTE} \le 3\text{ days}$ to ensure non-delivery compliance.
+
+4. **Ground Truth Data Preservation**:
+   - Original MCX Bhavcopy settlement prices (`close`, `open`, `high`, `low`, `volume`, `open_interest`) are strictly immutable and never overwritten in the database.
+
+---
+
+### Mathematical Normalization Invariance Principle
+Quotation-unit differences alone do not generate spurious relative-value signals. When underlying physical gold trades at ₹7,500/g:
+- GOLDM quoted at ₹75,000 / 10g → Normalized to ₹75,000 / 10g.
+- GOLDGUINEA quoted at ₹60,000 / 8g → Normalized to ₹60,000 × (10/8) = ₹75,000 / 10g.
+- GOLDPETAL quoted at ₹7,500 / 1g → Normalized to ₹7,500 × 10 = ₹75,000 / 10g.
+
+---
+
+## 🚀 Exact Windows Setup Commands
+
+### Prerequisites
+1. **Python 3.12+** (free from [python.org](https://www.python.org/))
+2. **Node.js 18+ and npm** (free from [nodejs.org](https://nodejs.org/))
+3. Windows PowerShell
+
+### Step 1: Open PowerShell and Navigate to Workspace
+```powershell
+cd d:\AurumIQ
+```
+
+### Step 2: Backend Setup & Automated Test Verification
+```powershell
+cd d:\AurumIQ\backend
+
+# Activate virtual environment
+.\.venv\Scripts\Activate.ps1
+
+# Install requirements (if setting up fresh)
+pip install -r requirements.txt
+
+# Run all 72 automated backend tests
+python -m pytest -v
+
+# Start FastAPI backend server (http://127.0.0.1:8000)
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Verify backend health in a separate PowerShell tab:
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/health" | ConvertTo-Json
