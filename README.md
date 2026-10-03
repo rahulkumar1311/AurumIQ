@@ -334,3 +334,21 @@ Navigate to `http://localhost:5173/`:
 - **Historical Spread Analysis**: Select Leg A and Leg B, configure lookback and Z-thresholds, and observe the 4 synchronized charts with Point-in-Time Z-scores, Bollinger Bands, and signal diagnostics.
 - **Backtesting Lab**: Click "Execute Walk-Forward Backtest" and observe gross vs. net performance, out-of-sample multi-period breakdown, benchmark Alpha/Beta, equity curve partition boundaries, and download the CSV audit report.
 - **Data Quality & Calendar**: Inspect pipeline health, active contract calendar with tender indicators, and audit log of imported Bhavcopy sessions.
+
+---
+
+## ⚠️ Known Limitations & Institutional Disclosures
+
+1. **Direct Automated MCX Portal Download Block**:
+   - Programmatic HTTP requests to `https://www.mcxindia.com/market-data/bhavcopy` are intercepted by MCX India's Web Application Firewall (WAF) or return dynamic ASP.NET ViewState forms, yielding HTTP 403 or non-CSV HTML responses.
+   - AurumIQ explicitly recognizes and transparently logs this behavior (`FETCH_BLOCKED` or `DYNAMIC_PORTAL_INTERACTION_REQUIRED`) in the audit database. It does **not** fabricate fake downloads. The user-facing workflow is seamlessly supported through the Bhavcopy CSV upload endpoint (`/api/bhavcopy/upload`).
+2. **Settlement Price vs. Executable Execution**:
+   - Official MCX Bhavcopy reports publish daily closing and settlement prices (clearing marks determined by the exchange).
+   - Settlement prices do not guarantee executable fill prices in real-time trading. Intraday execution is subject to order book depth, bid-ask spread slippage, and queue priority.
+3. **Thin Contract Liquidity**:
+   - Retail contracts like GOLDPETAL and GOLDGUINEA may experience periods of low trading volume relative to wholesale GOLDM. Frictions may be higher than estimated during stressed market conditions. AurumIQ includes an explicit illiquidity penalty in its statutory friction engine.
+4. **Physical Delivery Tender Restrictions**:
+   - MCX gold contracts enter a staggered physical delivery tender period in their final 3 trading days. Non-delivery participants must square off or roll positions prior to the tender window. AurumIQ blocks actionable signals and forces backtest rolls when $\text{DTE} \le 3$.
+5. **No Claim of Live Market Access or Guaranteed Returns**:
+   - AurumIQ does not claim live exchange connectivity, live broker API execution, or guaranteed trading profitability.
+   - Historical backtesting metrics represent simulated mathematical evaluations under explicit cost assumptions and must not be interpreted as financial advice.
