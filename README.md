@@ -288,3 +288,49 @@ To eliminate data mining, backtest overfitting, and look-ahead bias, AurumIQ imp
    - Walk-forward backtest results exportable to CSV via `/api/backtest/report`.
    - Normalization assumptions matrix exportable to CSV via `/api/normalization/report`.
 
+---
+
+## 🧪 Steps for Reproducing the Evaluation
+
+To reproduce the evaluation and verify all system components:
+
+### 1. Execute Automated Test Suite (72 Tests Across 6 Suites)
+```powershell
+cd d:\AurumIQ\backend
+.\.venv\Scripts\Activate.ps1
+python -m pytest -v
+```
+All 72 tests pass:
+- `tests/test_aurumiq.py` (25 tests): Core math, OHLC validation, point-in-time spreads, zero variance, outlier bounds, calendar gaps, walk-forward isolation, parameter freezing, and contract rolls.
+- `tests/test_e2e_bhavcopy_audit.py` (17 tests): End-to-end Bhavcopy ingestion, persistence, date mismatch rejection, empty file handling, extension validation, insufficient history diagnostics, and direct download status auditing.
+- `tests/test_mcx_bhavcopy.py` (13 tests): Date parsing, compact expiries, whitespace stripping, duplicate deduplication, genuine Bhavcopy file ingestion from disk, and date-mismatch rejection.
+- `tests/test_mcx_spec_audit.py` (9 tests): Official MCX trading units, quotation units, purity conventions (OFFICIAL_MCX vs PROBLEM_STATEMENT_03), expiry rules, tender period constraints, and ground-truth exchange data preservation.
+- `tests/test_normalization_engine.py` (7 tests): Mathematical invariance, quotation multiplier, purity conversion, and multiplier matrices.
+- `tests/test_e2e_api.py` (1 test): Comprehensive self-contained API test across all endpoints.
+
+### 2. Verify Date Mismatch Rejection
+Run the explicit python verification script:
+```powershell
+& ".\.venv\Scripts\python.exe" -c "
+from app.ingestion.mcx_parser import parse_mcx_bhavcopy_file
+with open('tests/fixtures/mcx_bhavcopy_genuine_sample.csv', 'r') as f:
+    res = parse_mcx_bhavcopy_file(f.read(), requested_date_str='22/09/2026')
+assert res['success'] is False
+assert res['status'] == 'DATE_MISMATCH'
+print('Date Mismatch Rejection Verified: PASSED')
+"
+```
+
+### 3. Verify Frontend Build & Visual UI
+```powershell
+cd d:\AurumIQ\frontend
+npm run lint
+npm run build
+npm run dev
+```
+Navigate to `http://localhost:5173/`:
+- **Overview Dashboard**: Inspect verified report date (`2026-09-18`), 4 normalized contract quotes, relative spread matrix, and the Normalization Multiplier Matrix.
+- **Cross-Contract Comparison**: Inspect multi-contract normalized historical price trends, cost of carry term structure, and contract liquidity distribution.
+- **Historical Spread Analysis**: Select Leg A and Leg B, configure lookback and Z-thresholds, and observe the 4 synchronized charts with Point-in-Time Z-scores, Bollinger Bands, and signal diagnostics.
+- **Backtesting Lab**: Click "Execute Walk-Forward Backtest" and observe gross vs. net performance, out-of-sample multi-period breakdown, benchmark Alpha/Beta, equity curve partition boundaries, and download the CSV audit report.
+- **Data Quality & Calendar**: Inspect pipeline health, active contract calendar with tender indicators, and audit log of imported Bhavcopy sessions.
