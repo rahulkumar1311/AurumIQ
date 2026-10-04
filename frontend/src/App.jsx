@@ -12,6 +12,7 @@ import CrossContractComparison from './pages/CrossContractComparison';
 import HistoricalSpreadAnalysis from './pages/HistoricalSpreadAnalysis';
 import BacktestingLab from './pages/BacktestingLab';
 import DataQualityCalendar from './pages/DataQualityCalendar';
+import { getApiUrl } from './config';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -24,7 +25,7 @@ export default function App() {
   // Global fetchers
   const fetchHealth = async () => {
     try {
-      const res = await fetch('/api/health');
+      const res = await fetch(getApiUrl('/api/health'));
       const data = await res.json();
       setHealth(data);
     } catch (err) {
@@ -34,7 +35,7 @@ export default function App() {
 
   const fetchOverview = async () => {
     try {
-      const res = await fetch('/api/overview');
+      const res = await fetch(getApiUrl('/api/overview'));
       const data = await res.json();
       setOverviewData(data);
     } catch (err) {
@@ -44,7 +45,7 @@ export default function App() {
 
   const fetchCrossContract = async () => {
     try {
-      const res = await fetch('/api/cross-contract');
+      const res = await fetch(getApiUrl('/api/cross-contract'));
       const data = await res.json();
       setCrossContractData(data);
     } catch (err) {
@@ -54,7 +55,7 @@ export default function App() {
 
   const fetchDataQuality = async () => {
     try {
-      const res = await fetch('/api/data-quality');
+      const res = await fetch(getApiUrl('/api/data-quality'));
       const data = await res.json();
       setDataQualityData(data);
     } catch (err) {
@@ -78,7 +79,7 @@ export default function App() {
   const handleLoadSample = async () => {
     setLoadingAction(true);
     try {
-      await fetch('/api/data-quality/ingest-sample', {
+      await fetch(getApiUrl('/api/data-quality/ingest-sample'), {
         method: 'POST'
       });
       await refreshAllData();
@@ -95,7 +96,7 @@ export default function App() {
     }
     setLoadingAction(true);
     try {
-      await fetch('/api/data-quality/reset', { method: 'POST' });
+      await fetch(getApiUrl('/api/data-quality/reset'), { method: 'POST' });
       await refreshAllData();
     } catch (err) {
       console.error('Failed to reset database:', err);

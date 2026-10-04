@@ -26,6 +26,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
+import { getApiUrl } from '../config';
 
 const CONTRACTS = ['GOLDM', 'GOLDTEN', 'GOLDGUINEA', 'GOLDPETAL'];
 
@@ -62,7 +63,7 @@ export default function BacktestingLab({
     if (!hasData) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/backtest/run', {
+      const res = await fetch(getApiUrl('/api/backtest/run'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -97,7 +98,7 @@ export default function BacktestingLab({
     try {
       await onLoadSample();
       // Execute walk-forward backtest immediately after 120-day dataset ingestion
-      const res = await fetch('/api/backtest/run', {
+      const res = await fetch(getApiUrl('/api/backtest/run'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -129,7 +130,7 @@ export default function BacktestingLab({
   const handleDownloadReport = async () => {
     setDownloadingReport(true);
     try {
-      const res = await fetch('/api/backtest/report', {
+      const res = await fetch(getApiUrl('/api/backtest/report'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

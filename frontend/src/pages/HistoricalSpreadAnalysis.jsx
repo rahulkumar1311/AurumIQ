@@ -27,6 +27,7 @@ import {
   TrendingDown
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
+import { getApiUrl } from '../config';
 
 const CONTRACTS = ['GOLDM', 'GOLDTEN', 'GOLDGUINEA', 'GOLDPETAL'];
 
@@ -65,7 +66,7 @@ export default function HistoricalSpreadAnalysis({
     }
     const fetchExpiries = async () => {
       try {
-        const res = await fetch('/api/expiries');
+        const res = await fetch(getApiUrl('/api/expiries'));
         if (res.ok) {
           const json = await res.json();
           setAvailableExpiries(json.expiries || {});
@@ -95,7 +96,7 @@ export default function HistoricalSpreadAnalysis({
       if (expiryA) params.append('expiry_a', expiryA);
       if (expiryB) params.append('expiry_b', expiryB);
 
-      const res = await fetch(`/api/spreads?${params.toString()}`);
+      const res = await fetch(getApiUrl(`/api/spreads?${params.toString()}`));
       if (!res.ok) {
         throw new Error(`Server returned HTTP ${res.status}`);
       }

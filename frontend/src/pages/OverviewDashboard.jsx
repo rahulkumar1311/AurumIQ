@@ -9,6 +9,7 @@ import {
   Download
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
+import { getApiUrl } from '../config';
 
 export default function OverviewDashboard({
   data,
@@ -310,7 +311,7 @@ export default function OverviewDashboard({
             </div>
           </div>
           <a
-            href="/api/normalization/report"
+            href={getApiUrl('/api/normalization/report')}
             download="aurumiq_normalization_audit_report.csv"
             className="btn btn-secondary btn-sm"
             style={{ textDecoration: 'none' }}

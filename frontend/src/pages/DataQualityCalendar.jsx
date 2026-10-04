@@ -11,6 +11,7 @@ import {
   ExternalLink,
   ShieldCheck
 } from 'lucide-react';
+import { getApiUrl } from '../config';
 
 export default function DataQualityCalendar({
   data,
@@ -37,7 +38,7 @@ export default function DataQualityCalendar({
     setDownloadResult(null);
 
     try {
-      const res = await fetch('/api/bhavcopy/download', {
+      const res = await fetch(getApiUrl('/api/bhavcopy/download'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requested_date: requestedDate })
@@ -73,7 +74,7 @@ export default function DataQualityCalendar({
     }
 
     try {
-      const res = await fetch('/api/bhavcopy/upload', {
+      const res = await fetch(getApiUrl('/api/bhavcopy/upload'), {
         method: 'POST',
         body: formData
       });
