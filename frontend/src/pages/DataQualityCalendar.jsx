@@ -201,12 +201,12 @@ export default function DataQualityCalendar({
               <label className="form-label" style={{ marginBottom: '0.35rem', display: 'block' }}>
                 1. Automated Direct Download from MCX
               </label>
-              <form onSubmit={handleDirectDownload} style={{ display: 'flex', gap: '0.5rem' }}>
+              <form onSubmit={handleDirectDownload} className="responsive-form-row" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <input
                   type="text"
                   placeholder="DD/MM/YYYY (e.g. 15/09/2026)"
                   className="form-input mono"
-                  style={{ width: '190px', fontSize: '0.8rem' }}
+                  style={{ minWidth: '170px', flex: '1 1 180px', fontSize: '0.8rem' }}
                   value={requestedDate}
                   onChange={(e) => setRequestedDate(e.target.value)}
                 />
@@ -214,6 +214,7 @@ export default function DataQualityCalendar({
                   type="submit"
                   className="btn btn-primary btn-sm"
                   disabled={downloading || !requestedDate}
+                  style={{ whiteSpace: 'nowrap' }}
                 >
                   <Download size={13} />
                   {downloading ? 'Querying MCX...' : 'Attempt Direct Download'}
@@ -246,7 +247,7 @@ export default function DataQualityCalendar({
 
             {/* Step 2: Reliable CSV Fallback Upload */}
             <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem', flexWrap: 'wrap', gap: '0.35rem' }}>
                 <label className="form-label">
                   2. Reliable Fallback: Upload Official Bhavcopy CSV
                 </label>
@@ -257,8 +258,8 @@ export default function DataQualityCalendar({
               </p>
               
               <form onSubmit={handleFileUpload}>
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <div style={{ flex: 1 }}>
+                <div className="responsive-form-row" style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1 1 200px' }}>
                     <input
                       type="file"
                       accept=".csv,.txt"
@@ -267,7 +268,7 @@ export default function DataQualityCalendar({
                       onChange={(e) => setUploadFile(e.target.files[0])}
                     />
                   </div>
-                  <div style={{ width: '140px' }}>
+                  <div style={{ flex: '1 1 140px' }}>
                     <input
                       type="text"
                       placeholder="Validate Date (DD/MM/YYYY)"
@@ -282,6 +283,7 @@ export default function DataQualityCalendar({
                     type="submit"
                     className="btn btn-gold btn-sm"
                     disabled={uploading || !uploadFile}
+                    style={{ whiteSpace: 'nowrap' }}
                   >
                     <FileCheck size={13} />
                     {uploading ? 'Validating...' : 'Validate & Import'}

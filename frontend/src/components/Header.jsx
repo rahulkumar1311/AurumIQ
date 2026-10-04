@@ -33,7 +33,7 @@ export default function Header({
       <div className="header-actions">
         {/* Source & Date Badge */}
         {hasData && latestDate && (
-          <div className="status-badge" style={{ background: '#fefce8', borderColor: '#fef08a' }}>
+          <div className="status-badge header-date-badge" style={{ background: '#fefce8', borderColor: '#fef08a' }}>
             <Calendar size={13} style={{ color: 'var(--gold-700)' }} />
             <span style={{ color: 'var(--gold-800)', fontSize: '0.725rem' }}>
               Data Date: <strong className="mono">{latestDate}</strong>
@@ -46,7 +46,7 @@ export default function Header({
         )}
 
         {/* Database Health Badge */}
-        <div className="status-badge">
+        <div className="status-badge header-health-badge">
           <div className={`status-dot ${isHealthy ? (hasData ? 'online' : 'empty') : ''}`} />
           <span style={{ color: 'var(--text-muted)' }}>Engine:</span>
           <strong>{isHealthy ? 'Connected' : 'Offline'}</strong>
@@ -60,7 +60,7 @@ export default function Header({
         {/* Actions */}
         {!hasData ? (
           <button
-            className="btn btn-gold btn-sm"
+            className="btn btn-gold btn-sm header-action-btn"
             onClick={onLoadSample}
             disabled={loadingAction}
             title="Load authentic MCX gold contracts dataset (120 trading days)"
@@ -69,9 +69,9 @@ export default function Header({
             {loadingAction ? 'Ingesting Feed...' : 'Load MCX Sample Data'}
           </button>
         ) : (
-          <div style={{ display: 'flex', gap: '0.4rem' }}>
+          <div className="header-buttons">
             <button
-              className={`btn btn-sm ${(!health?.total_trading_days || health?.total_trading_days < 30) ? 'btn-gold' : 'btn-secondary'}`}
+              className={`btn btn-sm header-action-btn ${(!health?.total_trading_days || health?.total_trading_days < 30) ? 'btn-gold' : 'btn-secondary'}`}
               onClick={onLoadSample}
               disabled={loadingAction}
               title="Load / re-seed authentic 120-day MCX benchmark dataset (required for 3-phase walk-forward testing)"
@@ -80,7 +80,7 @@ export default function Header({
               {loadingAction ? 'Ingesting...' : ((!health?.total_trading_days || health?.total_trading_days < 30) ? '⚡ Load 120d History' : 'Load 120d Feed')}
             </button>
             <button
-              className="btn btn-secondary btn-sm"
+              className="btn btn-secondary btn-sm header-action-btn"
               onClick={onNavigateToDataQuality}
               title="Upload MCX Bhavcopy CSV or view contract calendar"
             >
@@ -88,7 +88,7 @@ export default function Header({
               Import Data
             </button>
             <button
-              className="btn btn-danger btn-sm"
+              className="btn btn-danger btn-sm header-action-btn"
               onClick={onReset}
               disabled={loadingAction}
               title="Reset database to initial empty state"

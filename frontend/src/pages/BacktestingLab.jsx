@@ -388,7 +388,7 @@ export default function BacktestingLab({
                 </select>
               </div>
 
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.75rem' }}>
+              <div className="backtest-submit-container" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                 <button
                   type="submit"
                   className="btn btn-gold"
@@ -431,7 +431,7 @@ export default function BacktestingLab({
             </div>
           </div>
           <div className="card-body" style={{ padding: '0.85rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-            <ul style={{ margin: 0, paddingLeft: '1.15rem', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.25rem' }}>
+            <ul className="two-col-list" style={{ margin: 0, paddingLeft: '1.15rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.25rem' }}>
               <li>Turnover Fee: <strong>0.0015%</strong></li>
               <li>CTT (Sell Side): <strong>0.01%</strong></li>
               <li>Stamp Duty (Buy): <strong>0.002%</strong></li>

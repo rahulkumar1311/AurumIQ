@@ -223,7 +223,7 @@ export default function HistoricalSpreadAnalysis({
             <Sliders size={17} style={{ color: 'var(--gold-600)' }} />
             Contract Selection & Relative-Value Model Calibration
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div className="preset-btn-bar" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Presets:</span>
             <button
               className="btn btn-secondary btn-sm"
@@ -659,7 +659,7 @@ export default function HistoricalSpreadAnalysis({
       )}
 
       {/* Visual Analytics Tabs */}
-      <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '0.25rem' }}>
+      <div className="sub-nav-tabs" style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '0.5rem', overflowX: 'auto' }}>
         <button
           className={`btn btn-sm ${activeChartTab === 'all' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => setActiveChartTab('all')}
